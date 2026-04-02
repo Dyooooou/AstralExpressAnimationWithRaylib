@@ -549,12 +549,19 @@ int main(void) {
                 fase = DONE;
             }
         }
+        // ── LOGIKA DONE (Selesai Mendarat) ──────────────────────
         else if (fase == DONE) {
-            warpFactor = lerpF(1.0f, 0.0f, clamp01(faseTimer/1.5f));
-            portalOpen = lerpF(1.0f, 0.0f, clamp01(faseTimer/1.5f));
-            if (faseTimer > 2.5f) {
-                fase = IDLE;
-                keretaX = 260; keretaY = SH/2;
+            // Biarkan kereta parkir dengan tenang selama 3 detik
+            if (faseTimer > 3.0f) {
+                // Reset semuanya dan kembali ke layar Input
+                fase = INPUT_WARP; 
+                faseTimer = 0.0f;
+                keretaX = 260.0f; 
+                keretaY = SH / 2.0f;
+                
+                // Kosongkan teks input agar siap diketik ulang
+                letterCount = 0;
+                inputText[0] = '\0';
             }
         }
 
@@ -570,11 +577,7 @@ int main(void) {
 
         // ── GAMBAR PORTAL KIRI ──────────────────────────────────
         if (leftPortalOpen > 0.0f) {
-            float pw = 100.0f * leftPortalOpen;
-            float ph = 400.0f * leftPortalOpen;
-            // Warnanya kubedakan sedikit (biru cerah) agar terlihat epik
-            DrawEllipse((int)leftPortalX, (int)portalY, pw, ph, (Color){50, 200, 255, 180});
-            DrawEllipse((int)leftPortalX, (int)portalY, pw * 0.7f, ph * 0.7f, (Color){150, 230, 255, 255});
+            drawPortal(leftPortalX, portalY, 110.0f, -portalRot, leftPortalOpen);
         }
 
         // ── GAMBAR KERETA DENGAN CLIPPING ───────────────────────

@@ -30,6 +30,7 @@ typedef struct {
     float x, y;
     float radius;
     Color color;
+    float speed;
 } Planet;
 Planet planets[NUM_PLANETS];
 
@@ -76,20 +77,35 @@ void drawPlanet(float cx, float cy, float r, Color warna) {
 
 void randomizePlanets() {
     for (int i = 0; i < NUM_PLANETS; i++) {
-        // Acak posisi agar tidak terlalu menempel ke pinggir layar
-        planets[i].x = (float)GetRandomValue(150, SW - 150);
+        // Taruh agak ke kanan layar atau di luar layar kanan agar ada ruang untuk bergerak ke kiri
+        planets[i].x = (float)GetRandomValue(SW / 2, SW + 300); 
         planets[i].y = (float)GetRandomValue(150, SH - 150);
         
-        // Acak ukuran radius (misal dari 40 sampai 120)
         planets[i].radius = (float)GetRandomValue(40, 120);
         
-        // Acak warna (r, g, b dari 30 sampai 200 agar warnanya tidak terlalu gelap atau terlalu mencolok)
+        // Beri kecepatan acak yang LAMBAT (karena planet sangat jauh ukurannya)
+        planets[i].speed  = (float)GetRandomValue(3, 10); 
+        
         planets[i].color = (Color){
             (unsigned char)GetRandomValue(30, 200),
             (unsigned char)GetRandomValue(30, 200),
             (unsigned char)GetRandomValue(30, 200),
             255
         };
+    }
+}
+
+// FUNGSI BARU: Menggerakkan planet
+void updatePlanets(float warpFactor, float dt) {
+    for (int i = 0; i < NUM_PLANETS; i++) {
+        // Planet bergerak ke kiri dipengaruhi oleh warpFactor (ngebut saat warp)
+        planets[i].x -= planets[i].speed * (1.0f + warpFactor * 8.0f) * dt;
+        
+        // Jika planet sudah bablas terlalu jauh ke kiri, kembalikan ke kanan (opsional untuk loop)
+        if (planets[i].x < -300) {
+            planets[i].x = SW + 300;
+            planets[i].y = (float)GetRandomValue(150, SH - 150);
+        }
     }
 }
 
@@ -516,6 +532,7 @@ int main(void) {
             
             if ((keretaX - 600.0f) > portalX) { 
                 currentWarpCount++; 
+                randomizePlanets();
                 if (currentWarpCount < targetWarpCount) {
                     fase = WARP_LOOP; // Lanjut loop (Kiri -> Kanan)
                     faseTimer = 0.0f;
@@ -545,6 +562,7 @@ int main(void) {
             // Cek jika ekor sudah masuk ke portal kanan lagi
             if ((keretaX - 600.0f) > portalX) {
                 currentWarpCount++;
+                randomizePlanets();
                 if (currentWarpCount < targetWarpCount) {
                     fase = WARP_LOOP; // Ulangi terus
                     faseTimer = 0.0f;
@@ -597,6 +615,8 @@ int main(void) {
         }
 
         updateBintang(warpFactor, dt);
+        updateBintang(warpFactor, dt);
+        updatePlanets(warpFactor, dt);
 
         BeginDrawing();
         ClearBackground((Color){3,5,18,255});

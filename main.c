@@ -451,6 +451,8 @@ int main(void) {
                 currentWarpCount = 0;
                 fase = IDLE;        // Mulai animasi
                 faseTimer = 0.0f;
+                // Simpan posisi kereta saat ini sebagai titik awal lompatan baru
+                startX = keretaX;
             }
         }
 
@@ -551,15 +553,13 @@ int main(void) {
         }
         // ── LOGIKA DONE (Selesai Mendarat) ──────────────────────
         else if (fase == DONE) {
-            // Biarkan kereta parkir dengan tenang selama 3 detik
-            if (faseTimer > 3.0f) {
-                // Reset semuanya dan kembali ke layar Input
+            // Kereta diam di tengah.
+            // Tunggu pengguna menekan ENTER untuk membuka menu input lagi
+            if (IsKeyPressed(KEY_ENTER)) {
                 fase = INPUT_WARP; 
-                faseTimer = 0.0f;
-                keretaX = 260.0f; 
-                keretaY = SH / 2.0f;
+                // PERHATIKAN: Kita TIDAK mereset keretaX ke 260.0f
+                // Kereta dibiarkan di posisi terakhirnya (di tengah)
                 
-                // Kosongkan teks input agar siap diketik ulang
                 letterCount = 0;
                 inputText[0] = '\0';
             }

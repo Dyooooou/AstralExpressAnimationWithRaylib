@@ -4,6 +4,9 @@
 // Primitif: Segitiga, Persegi, Lingkaran
 
 #include "raylib.h"
+#include "src/algo/bresenham.h"
+#include "src/algo/dda.h"
+#include "src/algo/midcircle.h"
 #include <math.h>
 #include <stdlib.h>
 
@@ -40,96 +43,155 @@ void drawBintang(float warpFactor) {
     for (int i = 0; i < NUM_STARS; i++) {
         if (warpFactor > 0.2f) {
             float streak = warpFactor * bintang[i].speed * 0.3f;
-            DrawLineEx((Vector2){bintang[i].x, bintang[i].y},
-                       (Vector2){bintang[i].x + streak, bintang[i].y},
-                       bintang[i].size * 0.7f, (Color){200,220,255,200});
+            int thick = (int)(bintang[i].size * 0.7f);
+            if (thick < 1) thick = 1;
+            Bres_ThickLine((int)bintang[i].x, (int)bintang[i].y,
+                           (int)(bintang[i].x + streak), (int)bintang[i].y,
+                           thick, (Color){200,220,255,200});
         } else {
-            DrawCircleV((Vector2){bintang[i].x, bintang[i].y},
-                        bintang[i].size, (Color){200,220,255,180});
+            MidcircleFilled((int)bintang[i].x, (int)bintang[i].y,
+                            (int)bintang[i].size, (Color){200,220,255,180});
         }
     }
 }
 
 // ── Planet ────────────────────────────────────────────────────
 void drawPlanet(float cx, float cy, float r, Color warna) {
-    DrawCircle(cx, cy, r, warna);
-    DrawCircle(cx - r*0.3f, cy - r*0.3f, r*0.55f,
-               (Color){warna.r+40, warna.g+40, warna.b+40, 80});
-    DrawCircle(cx + r*0.2f, cy + r*0.2f, r*0.7f, (Color){0,0,0,60});
-    DrawCircleLines(cx, cy, r, (Color){255,255,255,40});
+    MidcircleFilled((int)cx, (int)cy, (int)r, warna);
+    MidcircleFilled((int)(cx - r*0.3f), (int)(cy - r*0.3f), (int)(r*0.55f),
+                    (Color){warna.r+40, warna.g+40, warna.b+40, 80});
+    MidcircleFilled((int)(cx + r*0.2f), (int)(cy + r*0.2f), (int)(r*0.7f), (Color){0,0,0,60});
+    Midcircle((int)cx, (int)cy, (int)r, (Color){255,255,255,40});
 }
 
-// ── Portal Warp ───────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════════
+//  HELPER: Color Lerp (Gradasi Transisi Warna)
+// ════════════════════════════════════════════════════════════════
+Color MyColorLerp(Color c1, Color c2, float t) {
+    t = (t < 0) ? 0 : (t > 1) ? 1 : t;
+    return (Color){
+        (unsigned char)(c1.r + t * (c2.r - c1.r)),
+        (unsigned char)(c1.g + t * (c2.g - c1.g)),
+        (unsigned char)(c1.b + t * (c2.b - c1.b)),
+        (unsigned char)(c1.a + t * (c2.a - c1.a))
+    };
+}
+
+
+void getSkewedHexagonVertices(Vector2 center, float radius, float rotasi, Vector2* vertices) {
+    // Relasi 6 titik segienam yang dibuat miring (skewed) di ruang unit, 
+    // meniru bentuk pusaran lorong dimensi (vortex).
+    Vector2 unitPoints[6] = {
+        { 0.2f, -1.0f }, // Titik 1: Top
+        { 0.9f, -0.4f }, // Titik 2: Top Right
+        { 0.7f,  0.8f }, // Titik 3: Bottom Right
+        {-0.1f,  0.9f }, // Titik 4: Bottom
+        {-0.9f,  0.3f }, // Titik 5: Bottom Left
+        {-0.6f, -0.7f }  // Titik 6: Top Left
+    };
+    
+    float cosA = cosf(rotasi), sinA = sinf(rotasi);
+    for (int i = 0; i < 6; i++) {
+        // Terapkan radius / skala
+        float vx = unitPoints[i].x * radius;
+        float vy = unitPoints[i].y * radius;
+        
+        // Putar sesuai rotasi portal dan geser ke titik tengah (center)
+        vertices[i].x = center.x + vx * cosA - vy * sinA;
+        vertices[i].y = center.y + vx * sinA + vy * cosA;
+    }
+}
+
+// ── Portal Warp (Segienam Miring dengan Gradasi) ─────────────────
 void drawPortal(float cx, float cy, float r, float rotasi, float openFactor) {
     if (openFactor <= 0.01f) return;
-    float rad = r * openFactor;
-    DrawCircle(cx, cy, rad+15, (Color){0,150,255,30});
-    DrawCircle(cx, cy, rad+8,  (Color){0,180,255,50});
-    DrawCircle(cx, cy, rad-3,  (Color){0,8,25,240});
-    DrawCircleLines(cx, cy, rad,   (Color){0,220,255,200});
-    DrawCircleLines(cx, cy, rad-4, (Color){100,230,255,150});
-    for (int i = 0; i < 8; i++) {
-        float sudut = rotasi + (i * 2*PI/8);
-        float x1 = cx + rad * cosf(sudut);
-        float y1 = cy + rad * sinf(sudut);
-        float x2 = cx + (rad*0.5f) * cosf(sudut+0.5f);
-        float y2 = cy + (rad*0.5f) * sinf(sudut+0.5f);
-        DrawLineEx((Vector2){x1,y1},(Vector2){x2,y2},
-                   1.5f,(Color){150,230,255,(unsigned char)(180*openFactor)});
-        DrawCircle(x1, y1, 3, (Color){200,240,255,(unsigned char)(200*openFactor)});
+    
+    // Gradasi Warna: Biru (Mulai) -> Ungu/Pink Intens (Saat Terbuka Lebar)
+    Color idleBase = (Color){0, 180, 255, 255};   // Biru energi
+    Color warpBase = (Color){220, 40, 200, 255};  // Pink/Ungu cerah
+    
+    // Warna inti: Hitam pekat -> Ungu Gelap
+    Color c_int = MyColorLerp((Color){5, 10, 25, 240}, (Color){40, 5, 50, 240}, openFactor);
+    // Warna cahaya luar
+    Color c_warp = MyColorLerp(idleBase, warpBase, openFactor);
+    
+    Vector2 pnts[6];
+
+    // [1] Isi Segienam Berlapis untuk efek Vortex
+    // Memecah segienam menjadi 4 segitiga pembentuk: (0,1,2), (0,2,3), (0,3,4), (0,4,5)
+    
+    // Lapis 1 (Terluar & Paling Transparan - Aura Portal)
+    getSkewedHexagonVertices((Vector2){cx, cy}, (r * openFactor) + 20, rotasi, pnts);
+    for(int i = 1; i <= 4; i++) {
+        FillTriangle(pnts[0], pnts[i], pnts[i+1], (Color){c_warp.r, c_warp.g, c_warp.b, 25});
     }
-    DrawCircle(cx, cy, rad*0.2f,  (Color){0,150,255,100});
-    DrawCircle(cx, cy, rad*0.08f, (Color){200,240,255,200});
+
+    // Lapis 2 (Bodi Cahaya Tengah)
+    getSkewedHexagonVertices((Vector2){cx, cy}, (r * openFactor) + 5, rotasi, pnts);
+    for(int i = 1; i <= 4; i++) {
+        FillTriangle(pnts[0], pnts[i], pnts[i+1], (Color){c_warp.r, c_warp.g, c_warp.b, 50});
+    }
+
+    // Lapis 3 (Inti Gelap Tempat Kereta Masuk)
+    getSkewedHexagonVertices((Vector2){cx, cy}, (r * openFactor) - 6, rotasi, pnts);
+    for(int i = 1; i <= 4; i++) {
+        FillTriangle(pnts[0], pnts[i], pnts[i+1], c_int);
+    }
+
+    // [2] Garis Pinggir Segienam (Hexagon Outlines)
+    int thick = 3;
+    
+    // Garis Utama Luar
+    getSkewedHexagonVertices((Vector2){cx, cy}, r * openFactor, rotasi, pnts);
+    Color c_line = MyColorLerp((Color){0, 220, 255, 200}, (Color){255, 150, 220, 200}, openFactor);
+    for (int i = 0; i < 6; i++) {
+        Bres_ThickLine((int)pnts[i].x, (int)pnts[i].y,
+        (int)pnts[(i+1)%6].x, (int)pnts[(i+1)%6].y,
+                       thick, c_line);
+    }
+    
+    // Garis Dalam (Sedikit diputar untuk memberi kesan 3D/Lorong)
+    getSkewedHexagonVertices((Vector2){cx, cy}, (r * openFactor) - 8, rotasi + 0.15f, pnts);
+    Color c_line_in = MyColorLerp((Color){150, 240, 255, 150}, (Color){255, 200, 240, 150}, openFactor);
+    for (int i = 0; i < 6; i++) {
+        Bres_ThickLine((int)pnts[i].x, (int)pnts[i].y, 
+                       (int)pnts[(i+1)%6].x, (int)pnts[(i+1)%6].y, 
+                       2, c_line_in);
+    }
+
+    // [3] Titik Pusat (Singularity Kecil di Tengah)
+    MidcircleFilled((int)cx, (int)cy, (int)((r * openFactor)*0.15f), 
+                   (Color){c_warp.r, c_warp.g, c_warp.b, (unsigned char)(100*openFactor)});
+    MidcircleFilled((int)cx, (int)cy, (int)((r * openFactor)*0.05f), 
+                   (Color){255, 255, 255, (unsigned char)(200*openFactor)});
 }
+
 
 // ════════════════════════════════════════════════════════════════
 //  RODA KERETA dengan CONNECTING ROD
-//
-//  Anatomi roda lokomotif:
-//    - Rim (cincin luar)        → DrawCircleLines
-//    - Jari-jari (spoke)        → garis dari pusat ke rim, dirotasi
-//    - Hub (pusat roda)         → lingkaran kecil
-//    - Crankpin                 → titik kecil di tepi, ikut rotasi roda
-//    - Connecting rod           → batang yang menghubungkan crankpin
-//                                 roda depan & roda belakang
-//    - Piston rod (opsional)    → batang horizontal dari crankpin ke depan
-//
-//  MATEMATIKA CONNECTING ROD:
-//    Crankpin roda i:
-//      pinX = cx + R * cos(θ + offset_i)
-//      pinY = cy + R * sin(θ + offset_i)
-//    Lalu DrawLineEx(pin_depan, pin_belakang) = connecting rod
 // ════════════════════════════════════════════════════════════════
-
-// Gambar satu roda beserta spoke-nya
-// cx,cy = pusat roda, r = radius, theta = sudut rotasi
 void drawRoda(float cx, float cy, float r, float theta, Color rimColor) {
-    // Ban / rim luar (lingkaran tebal)
-    DrawCircle(cx, cy, r,     (Color){30,30,35,255});     // ban hitam
-    DrawCircleLines(cx, cy, r,     rimColor);
-    DrawCircleLines(cx, cy, r-1.5f, rimColor);
+    int icx = (int)cx, icy = (int)cy, ir = (int)r;
 
-    // Jari-jari (spoke) — 6 buah, dirotasi sesuai theta
-    // Rumus: ujung spoke = (cx + r*cos(theta + i*60°), cy + r*sin(theta + i*60°))
+    MidcircleFilled(icx, icy, ir, (Color){30,30,35,255});
+    MidcircleThick(icx, icy, ir, 1, rimColor);
+    Midcircle(icx, icy, ir - 1, rimColor); // rim tebal
+
     int numSpoke = 6;
     for (int i = 0; i < numSpoke; i++) {
         float sudut = theta + i * (2*PI / numSpoke);
-        float sx = cx + (r - 2) * cosf(sudut);
-        float sy = cy + (r - 2) * sinf(sudut);
-        DrawLineEx((Vector2){cx, cy}, (Vector2){sx, sy},
-                   1.8f, (Color){rimColor.r, rimColor.g, rimColor.b, 180});
+        int sx = (int)(cx + (r - 2) * cosf(sudut));
+        int sy = (int)(cy + (r - 2) * sinf(sudut));
+        Bres_ThickLine(icx, icy, sx, sy, 2, (Color){rimColor.r, rimColor.g, rimColor.b, 180});
     }
 
-    // Hub tengah (lingkaran kecil)
-    DrawCircle(cx, cy, r*0.18f, (Color){60,60,70,255});
-    DrawCircleLines(cx, cy, r*0.18f, rimColor);
+    int hubR = (int)(r * 0.18f);
+    MidcircleFilled(icx, icy, hubR, (Color){60,60,70,255});
+    Midcircle(icx, icy, hubR, rimColor);
 
-    // Flange (tonjolan dalam di kereta sungguhan) — cincin dalam
-    DrawCircleLines(cx, cy, r*0.88f, (Color){rimColor.r,rimColor.g,rimColor.b,80});
+    Midcircle(icx, icy, (int)(r * 0.88f), (Color){rimColor.r,rimColor.g,rimColor.b,80});
 }
 
-// Gambar crankpin (titik koneksi connecting rod di tepi roda)
-// Posisi: (cx + crankR * cos(theta), cy + crankR * sin(theta))
 Vector2 getCrankPin(float cx, float cy, float crankR, float theta) {
     return (Vector2){
         cx + crankR * cosf(theta),
@@ -139,223 +201,121 @@ Vector2 getCrankPin(float cx, float cy, float crankR, float theta) {
 
 // ════════════════════════════════════════════════════════════════
 //  KERETA ASTRAL EXPRESS
-//
-//  Susunan (kiri ke kanan):
-//    [Tender/Ekor] - [Badan Kereta] - [Ruang Mesin/Boiler] - [Cerobong/Kepala]
-//
-//  Roda:
-//    - 2 roda besar di tengah (driving wheels) — ada connecting rod
-//    - 1 roda kecil di belakang (trailing wheel)
-//    - 1 roda kecil di depan   (leading wheel)
-//
-//  Warp stretch: kereta memanjang horizontal saat masuk portal
-//    sx = 1 + warpFactor * 3
-//    sy = 1 - warpFactor * 0.3
 // ════════════════════════════════════════════════════════════════
 void drawKereta(float cx, float cy, float angle, float warpFactor, float rodaTheta) {
     float sx = 1.0f + warpFactor * 3.0f;
     float sy = 1.0f - warpFactor * 0.3f;
-    float scale = 1.5f; // ← ubah ini (1.0 = normal)
+    float scale = 1.5f;
 
     float cosA = cosf(angle), sinA = sinf(angle);
-
-    // Transformasi titik lokal → dunia
-    // #define T(lx, ly) (Vector2){ \
-    //     cx + ((lx)*sx)*cosA - ((ly)*sy)*sinA, \
-    //     cy + ((lx)*sx)*sinA + ((ly)*sy)*cosA  \
-    // }
 
     #define T(lx, ly) (Vector2){ \
     cx + ((lx * scale)*sx)*cosA - ((ly * scale)*sy)*sinA, \
     cy + ((lx * scale)*sx)*sinA + ((ly * scale)*sy)*cosA  \
     }
-    // Transformasi hanya untuk posisi (tanpa skala, untuk roda)
-    // #define TPOS(lx, ly) (Vector2){ \
-    //     cx + (lx)*cosA - (ly)*sinA, \
-    //     cy + (lx)*sinA + (ly)*cosA  \
-    // }
 
     #define TPOS(lx, ly) (Vector2){ \
     cx + (lx * scale)*cosA - (ly * scale)*sinA, \
     cy + (lx * scale)*sinA + (ly * scale)*cosA  \
     }
-    // ── Warna tema Astral Express ─────────────────────────────
+
     Color merahGelap  = (Color){160, 30,  30,  255};
     Color merahTerang = (Color){200, 50,  50,  255};
-    Color krem        = (Color){220, 200, 150, 255};
-    Color kremGelap   = (Color){180, 160, 110, 255};
+    // Color krem        = (Color){220, 200, 150, 255};
+    // Color kremGelap   = (Color){180, 160, 110, 255};
     Color hitamBaja   = (Color){35,  35,  40,  255};
     Color chrome      = (Color){180, 185, 195, 255};
     Color emas        = (Color){200, 160, 60,  255};
     Color emasTerang  = (Color){240, 200, 80,  255};
 
-    // ════════════════════════════════════════════════════════
-    // [1] BADAN UTAMA KERETA (persegi panjang merah)
-    //     Digambar sebagai 2 segitiga
-    // ════════════════════════════════════════════════════════
-    // Badan belakang (gerbong)
-    Vector2 b1 = T(-95, -22);
-    Vector2 b2 = T(-95,  18);
-    Vector2 b3 = T( 20,  18);
-    Vector2 b4 = T( 20, -22);
-    DrawTriangle(b1, b2, b3, merahGelap);
-    DrawTriangle(b1, b3, b4, merahGelap);
+    // [1] BADAN UTAMA KERETA
+    Vector2 b1 = T(-95, -22), b2 = T(-95,  18), b3 = T( 20,  18), b4 = T( 20, -22);
+    FillTriangle(b1, b2, b3, merahGelap);
+    FillTriangle(b1, b3, b4, merahGelap);
 
-    // Stripe / panel dekorasi emas di badan
-    Vector2 s1 = T(-95, -22);
-    Vector2 s2 = T(-95, -17);
-    Vector2 s3 = T( 20, -17);
-    Vector2 s4 = T( 20, -22);
-    DrawTriangle(s1, s2, s3, emas);
-    DrawTriangle(s1, s3, s4, emas);
+    Vector2 s1 = T(-95, -22), s2 = T(-95, -17), s3 = T( 20, -17), s4 = T( 20, -22);
+    FillTriangle(s1, s2, s3, emas);
+    FillTriangle(s1, s3, s4, emas);
 
-    Vector2 s5 = T(-95, 13);
-    Vector2 s6 = T(-95, 18);
-    Vector2 s7 = T( 20, 18);
-    Vector2 s8 = T( 20, 13);
-    DrawTriangle(s5, s6, s7, emas);
-    DrawTriangle(s5, s7, s8, emas);
+    Vector2 s5 = T(-95, 13), s6 = T(-95, 18), s7 = T( 20, 18), s8 = T( 20, 13);
+    FillTriangle(s5, s6, s7, emas);
+    FillTriangle(s5, s7, s8, emas);
 
-    // ════════════════════════════════════════════════════════
-    // [2] KEPALA LOKOMOTIF / BOILER (depan, lebih besar)
-    //     Bentuk: trapesium miring ke depan (segitiga x2)
-    // ════════════════════════════════════════════════════════
-    Vector2 k1 = T( 20, -26);
-    Vector2 k2 = T( 20,  18);
-    Vector2 k3 = T( 70,  18);
-    Vector2 k4 = T( 75, -22);
-    DrawTriangle(k1, k2, k3, merahTerang);
-    DrawTriangle(k1, k3, k4, merahTerang);
+    // [2] KEPALA LOKOMOTIF / BOILER
+    Vector2 k1 = T( 20, -26), k2 = T( 20,  18), k3 = T( 70,  18), k4 = T( 75, -22);
+    FillTriangle(k1, k2, k3, merahTerang);
+    FillTriangle(k1, k3, k4, merahTerang);
 
-    // Panel mesin (persegi kecil di boiler)
-    Vector2 p1 = T(22, -20);
-    Vector2 p2 = T(22,  12);
-    Vector2 p3 = T(65,  12);
-    Vector2 p4 = T(68, -20);
-    DrawTriangle(p1, p2, p3, hitamBaja);
-    DrawTriangle(p1, p3, p4, hitamBaja);
+    Vector2 p1 = T(22, -20), p2 = T(22,  12), p3 = T(65,  12), p4 = T(68, -20);
+    FillTriangle(p1, p2, p3, hitamBaja);
+    FillTriangle(p1, p3, p4, hitamBaja);
 
-    // ════════════════════════════════════════════════════════
-    // [3] CEROBONG ASAP (depan atas)
-    //     Persegi panjang + segitiga di atas
-    // ════════════════════════════════════════════════════════
-    // Batang cerobong
-    Vector2 c1 = T(52, -22);
-    Vector2 c2 = T(52, -38);
-    Vector2 c3 = T(62, -38);
-    Vector2 c4 = T(62, -22);
-    DrawTriangle(c1, c2, c3, hitamBaja);
-    DrawTriangle(c1, c3, c4, hitamBaja);
-    // Kepala cerobong (melebar ke atas — trapesium)
-    Vector2 ct1 = T(49, -38);
-    Vector2 ct2 = T(49, -43);
-    Vector2 ct3 = T(65, -43);
-    Vector2 ct4 = T(65, -38);
-    DrawTriangle(ct1, ct2, ct3, hitamBaja);
-    DrawTriangle(ct1, ct3, ct4, hitamBaja);
+    // [3] CEROBONG ASAP
+    Vector2 c1 = T(52, -22), c2 = T(52, -38), c3 = T(62, -38), c4 = T(62, -22);
+    FillTriangle(c1, c2, c3, hitamBaja);
+    FillTriangle(c1, c3, c4, hitamBaja);
+    
+    Vector2 ct1 = T(49, -38), ct2 = T(49, -43), ct3 = T(65, -43), ct4 = T(65, -38);
+    FillTriangle(ct1, ct2, ct3, hitamBaja);
+    FillTriangle(ct1, ct3, ct4, hitamBaja);
 
-    // ════════════════════════════════════════════════════════
-    // [4] KUBAH UAP (steam dome) — lingkaran di atas boiler
-    // ════════════════════════════════════════════════════════
+    // [4] KUBAH UAP (steam dome)
     Vector2 dome = T(35, -22);
-    DrawCircle(dome.x, dome.y, 10*sy, merahTerang);
-    DrawCircleLines(dome.x, dome.y, 10*sy, emas);
+    MidcircleFilled((int)dome.x, (int)dome.y, (int)(10*sy), merahTerang);
+    Midcircle((int)dome.x, (int)dome.y, (int)(10*sy), emas);
 
-    // ════════════════════════════════════════════════════════
     // [5] JENDELA KABIN
-    // ════════════════════════════════════════════════════════
-    // Jendela besar (kiri badan)
-    Vector2 j1 = T(-75, -20);
-    Vector2 j2 = T(-75,  -4);
-    Vector2 j3 = T(-55,  -4);
-    Vector2 j4 = T(-55, -20);
-    DrawTriangle(j1, j2, j3, (Color){10, 180, 220, 200});
-    DrawTriangle(j1, j3, j4, (Color){10, 180, 220, 200});
-    DrawLineEx(j1, j4, 1.5f, emasTerang);
-    DrawLineEx(j4, j3, 1.5f, emasTerang);
-    DrawLineEx(j3, j2, 1.5f, emasTerang);
-    DrawLineEx(j2, j1, 1.5f, emasTerang);
+    Vector2 j1 = T(-75, -20), j2 = T(-75,  -4), j3 = T(-55,  -4), j4 = T(-55, -20);
+    FillTriangle(j1, j2, j3, (Color){10, 180, 220, 200});
+    FillTriangle(j1, j3, j4, (Color){10, 180, 220, 200});
+    Bres_ThickLine((int)j1.x, (int)j1.y, (int)j4.x, (int)j4.y, 2, emasTerang);
+    Bres_ThickLine((int)j4.x, (int)j4.y, (int)j3.x, (int)j3.y, 2, emasTerang);
+    Bres_ThickLine((int)j3.x, (int)j3.y, (int)j2.x, (int)j2.y, 2, emasTerang);
+    Bres_ThickLine((int)j2.x, (int)j2.y, (int)j1.x, (int)j1.y, 2, emasTerang);
 
-    // Jendela tengah
-    Vector2 j5 = T(-45, -20);
-    Vector2 j6 = T(-45,  -4);
-    Vector2 j7 = T(-28,  -4);
-    Vector2 j8 = T(-28, -20);
-    DrawTriangle(j5, j6, j7, (Color){10, 180, 220, 180});
-    DrawTriangle(j5, j7, j8, (Color){10, 180, 220, 180});
-    DrawLineEx(j5, j8, 1.5f, emasTerang);
-    DrawLineEx(j8, j7, 1.5f, emasTerang);
-    DrawLineEx(j7, j6, 1.5f, emasTerang);
-    DrawLineEx(j6, j5, 1.5f, emasTerang);
+    Vector2 j5 = T(-45, -20), j6 = T(-45,  -4), j7 = T(-28,  -4), j8 = T(-28, -20);
+    FillTriangle(j5, j6, j7, (Color){10, 180, 220, 180});
+    FillTriangle(j5, j7, j8, (Color){10, 180, 220, 180});
+    Bres_ThickLine((int)j5.x, (int)j5.y, (int)j8.x, (int)j8.y, 2, emasTerang);
+    Bres_ThickLine((int)j8.x, (int)j8.y, (int)j7.x, (int)j7.y, 2, emasTerang);
+    Bres_ThickLine((int)j7.x, (int)j7.y, (int)j6.x, (int)j6.y, 2, emasTerang);
+    Bres_ThickLine((int)j6.x, (int)j6.y, (int)j5.x, (int)j5.y, 2, emasTerang);
 
-    // ════════════════════════════════════════════════════════
-    // [6] CHASSIS / UNDERFRAME (bawah badan)
-    //     Persegi panjang tipis berwarna baja
-    // ════════════════════════════════════════════════════════
-    Vector2 u1 = T(-95, 18);
-    Vector2 u2 = T(-95, 24);
-    Vector2 u3 = T( 75, 24);
-    Vector2 u4 = T( 75, 18);
-    DrawTriangle(u1, u2, u3, hitamBaja);
-    DrawTriangle(u1, u3, u4, hitamBaja);
-    DrawLineEx(u1, u4, 1.5f, chrome);
+    // [6] CHASSIS
+    Vector2 u1 = T(-95, 18), u2 = T(-95, 24), u3 = T( 75, 24), u4 = T( 75, 18);
+    FillTriangle(u1, u2, u3, hitamBaja);
+    FillTriangle(u1, u3, u4, hitamBaja);
+    Bres_ThickLine((int)u1.x, (int)u1.y, (int)u4.x, (int)u4.y, 2, chrome);
 
-    // ════════════════════════════════════════════════════════
-    // [7] COWCATCHER (pelindung depan — segitiga lancip)
-    // ════════════════════════════════════════════════════════
-    DrawTriangle(T(75, 18), T(90, 24), T(75, 24), (Color){120,120,130,255});
-    DrawTriangle(T(75, 18), T(75, 24), T(90, 24), (Color){140,140,150,255});
-    // Garis-garis cowcatcher
+    // [7] COWCATCHER
+    FillTriangle(T(75, 18), T(90, 24), T(75, 24), (Color){120,120,130,255});
+    FillTriangle(T(75, 18), T(75, 24), T(90, 24), (Color){140,140,150,255});
     for (int i = 0; i < 3; i++) {
         float lx = 76 + i*5;
-        DrawLineEx(T(lx, 18), T(lx+7, 24), 1.2f, chrome);
+        Vector2 cw1 = T(lx, 18), cw2 = T(lx+7, 24);
+        Bres_ThickLine((int)cw1.x, (int)cw1.y, (int)cw2.x, (int)cw2.y, 1, chrome);
     }
 
-    // ════════════════════════════════════════════════════════
-    // [8] LAMPU DEPAN (lingkaran)
-    // ════════════════════════════════════════════════════════
+    // [8] LAMPU DEPAN
     Vector2 lamp = T(78, -5);
-    DrawCircle(lamp.x, lamp.y, 6*sy,  hitamBaja);
-    DrawCircle(lamp.x, lamp.y, 5*sy,  (Color){255,240,180,230});
-    DrawCircle(lamp.x, lamp.y, 3*sy,  (Color){255,255,220,255});
+    MidcircleFilled((int)lamp.x, (int)lamp.y, (int)(6*sy),  hitamBaja);
+    MidcircleFilled((int)lamp.x, (int)lamp.y, (int)(5*sy),  (Color){255,240,180,230});
+    MidcircleFilled((int)lamp.x, (int)lamp.y, (int)(3*sy),  (Color){255,255,220,255});
 
-    // ════════════════════════════════════════════════════════
     // [9] RODA + CONNECTING ROD
-    //
-    //  Posisi roda (koordinat lokal, sumbu Y ke atas = negatif di layar):
-    //    roda[0] = leading wheel (kecil, paling depan)   lx= 55, ly=24
-    //    roda[1] = driving wheel depan (besar)           lx= 25, ly=24
-    //    roda[2] = driving wheel belakang (besar)        lx=-20, ly=24
-    //    roda[3] = trailing wheel (kecil, belakang)      lx=-65, ly=24
-    //    roda[4] = trailing wheel (kecil, paling belakang) lx=-85, ly=24
-    //
-    //  Roda besar punya connecting rod:
-    //    crankPin = pusat roda + crankRadius * (cos(theta), sin(theta))
-    //    connecting rod = garis dari crankPin[1] ke crankPin[2]
-    //    side rod      = garis dari crankPin[1] ke crankPin[2] (sama)
-    //    piston rod    = dari crankPin[1] ke arah depan (lx+pistonLen, ly_pin)
-    // ════════════════════════════════════════════════════════
-
     Color rodaColor = chrome;
-    float crankR_besar = 10.0f;   // radius lingkaran crankpin di roda besar
+    float crankR_besar = 10.0f;
 
-    // Posisi lokal pusat roda
     float rodaLX[5] = { 55,  25, -20, -65, -85 };
     float rodaLY[5] = { 24,  24,  24,  24,  24  };
     float rodaR[5]  = { 8,   14,  14,   8,   8  };
-    // Roda besar (index 1,2) berputar dengan rodaTheta
-    // Roda kecil berputar lebih cepat (radius lebih kecil → angular speed lebih cepat)
     float thetaRoda[5];
-    thetaRoda[0] = rodaTheta * (14.0f/8.0f);   // leading: lebih cepat
+    thetaRoda[0] = rodaTheta * (14.0f/8.0f);
     thetaRoda[1] = rodaTheta;
     thetaRoda[2] = rodaTheta;
     thetaRoda[3] = rodaTheta * (14.0f/8.0f);
     thetaRoda[4] = rodaTheta * (14.0f/8.0f);
 
-    // ── Gambar connecting rod & side rod DULU (di balik roda) ──
-
-    // Hitung posisi dunia crankpin roda besar (index 1 dan 2)
-    // Pin roda 1 (driving depan)
     Vector2 pusat1 = TPOS(rodaLX[1], rodaLY[1]);
     Vector2 pusat2 = TPOS(rodaLX[2], rodaLY[2]);
     Vector2 pin1   = (Vector2){
@@ -367,65 +327,53 @@ void drawKereta(float cx, float cy, float angle, float warpFactor, float rodaThe
         pusat2.y + crankR_besar * sinf(thetaRoda[2])
     };
 
-    // CONNECTING ROD: menghubungkan crankpin roda 1 dan roda 2
-    // Ini adalah batang paling ikonik di lokomotif uap
-    DrawLineEx(pin1, pin2, 4.5f, (Color){100,100,110,255}); // bayangan
-    DrawLineEx(pin1, pin2, 3.0f, chrome);                   // batang utama
-    // Baut di ujung connecting rod
-    DrawCircle(pin1.x, pin1.y, 4, chrome);
-    DrawCircle(pin1.x, pin1.y, 2, hitamBaja);
-    DrawCircle(pin2.x, pin2.y, 4, chrome);
-    DrawCircle(pin2.x, pin2.y, 2, hitamBaja);
+    Bres_ThickLine((int)pin1.x, (int)pin1.y, (int)pin2.x, (int)pin2.y, 5, (Color){100,100,110,255});
+    Bres_ThickLine((int)pin1.x, (int)pin1.y, (int)pin2.x, (int)pin2.y, 3, chrome);
+    
+    MidcircleFilled((int)pin1.x, (int)pin1.y, 4, chrome);
+    MidcircleFilled((int)pin1.x, (int)pin1.y, 2, hitamBaja);
+    MidcircleFilled((int)pin2.x, (int)pin2.y, 4, chrome);
+    MidcircleFilled((int)pin2.x, (int)pin2.y, 2, hitamBaja);
 
-    // PISTON ROD: dari crankpin roda depan menuju depan (slide horizontal)
-    // Simulasi gerak maju-mundur piston mengikuti rotasi roda
-    // pistonX = pusat1.x + crankR * cos(theta)  (sudah = pin1.x)
-    // ujung piston tetap di depan (x tetap), hanya pin yang bergerak
     float pistonEndX = TPOS(90, rodaLY[1]).x;
-    DrawLineEx(pin1, (Vector2){pistonEndX, pin1.y}, 2.5f, (Color){80,80,90,255});
-    DrawLineEx(pin1, (Vector2){pistonEndX, pin1.y}, 1.5f, chrome);
+    Bres_ThickLine((int)pin1.x, (int)pin1.y, (int)pistonEndX, (int)pin1.y, 3, (Color){80,80,90,255});
+    Bres_ThickLine((int)pin1.x, (int)pin1.y, (int)pistonEndX, (int)pin1.y, 2, chrome);
 
-    // Silinder piston (kotak di depan roda 1)
-    Vector2 sv1 = T(70, 16);
-    Vector2 sv2 = T(70, 23);
-    Vector2 sv3 = T(80, 23);
-    Vector2 sv4 = T(80, 16);
-    DrawTriangle(sv1,sv2,sv3, (Color){50,52,60,255});
-    DrawTriangle(sv1,sv3,sv4, (Color){50,52,60,255});
-    DrawLineEx(sv1,sv4,1.0f,chrome);
+    Vector2 sv1 = T(70, 16), sv2 = T(70, 23), sv3 = T(80, 23), sv4 = T(80, 16);
+    FillTriangle(sv1,sv2,sv3, (Color){50,52,60,255});
+    FillTriangle(sv1,sv3,sv4, (Color){50,52,60,255});
+    Bres_ThickLine((int)sv1.x, (int)sv1.y, (int)sv4.x, (int)sv4.y, 1, chrome);
 
-    // ── Gambar semua roda ────────────────────────────────────
     for (int i = 0; i < 5; i++) {
         Vector2 wp = TPOS(rodaLX[i], rodaLY[i]);
         drawRoda(wp.x, wp.y, rodaR[i] * sy, thetaRoda[i], rodaColor);
     }
 
-    // ── Ornamen / detail tambahan ────────────────────────────
-    // Rel pemandu (handrail) di atas boiler
-    DrawLineEx(T(20,-26), T(72,-26), 1.5f, emas);
-    DrawLineEx(T(-95,-22), T(20,-22), 1.0f, emas);
+    Vector2 hr1 = T(20,-26), hr2 = T(72,-26);
+    Vector2 hr3 = T(-95,-22), hr4 = T(20,-22);
+    Bres_ThickLine((int)hr1.x, (int)hr1.y, (int)hr2.x, (int)hr2.y, 2, emas);
+    Bres_ThickLine((int)hr3.x, (int)hr3.y, (int)hr4.x, (int)hr4.y, 1, emas);
 
-    // Kopling depan (hook kecil)
-    DrawLineEx(T(90, 20), T(98, 20), 2.5f, chrome);
-    DrawLineEx(T(98, 17), T(98, 23), 2.5f, chrome);
+    Vector2 cp1 = T(90, 20), cp2 = T(98, 20);
+    Vector2 cp3 = T(98, 17), cp4 = T(98, 23);
+    Bres_ThickLine((int)cp1.x, (int)cp1.y, (int)cp2.x, (int)cp2.y, 3, chrome);
+    Bres_ThickLine((int)cp3.x, (int)cp3.y, (int)cp4.x, (int)cp4.y, 3, chrome);
 
-    // Kopling belakang
-    DrawLineEx(T(-95, 20), T(-103, 20), 2.5f, chrome);
+    Vector2 cpb1 = T(-95, 20), cpb2 = T(-103, 20);
+    Bres_ThickLine((int)cpb1.x, (int)cpb1.y, (int)cpb2.x, (int)cpb2.y, 3, chrome);
 
-    // Engine glow saat warp (dari kopling belakang)
     if (warpFactor > 0.1f) {
         Vector2 gpos = T(-103, 20);
         float gr = 5.0f + warpFactor * 10.0f;
-        DrawCircle(gpos.x, gpos.y, gr+4, (Color){0,150,255,(unsigned char)(40*warpFactor)});
-        DrawCircle(gpos.x, gpos.y, gr,   (Color){100,200,255,(unsigned char)(150*warpFactor)});
-        DrawCircle(gpos.x, gpos.y, gr*0.4f, (Color){255,255,255,(unsigned char)(220*warpFactor)});
+        MidcircleFilled((int)gpos.x, (int)gpos.y, (int)(gr+4), (Color){0,150,255,(unsigned char)(40*warpFactor)});
+        MidcircleFilled((int)gpos.x, (int)gpos.y, (int)gr,   (Color){100,200,255,(unsigned char)(150*warpFactor)});
+        MidcircleFilled((int)gpos.x, (int)gpos.y, (int)(gr*0.4f), (Color){255,255,255,(unsigned char)(220*warpFactor)});
     }
 
     #undef T
     #undef TPOS
 }
 
-// ── Helper ────────────────────────────────────────────────────
 float lerpF(float a, float b, float t) { return a + (b-a)*t; }
 float clamp01(float t) { return t<0?0:(t>1?1:t); }
 
@@ -439,7 +387,7 @@ int main(void) {
     float faseTimer   = 0.0f;
     float warpFactor  = 0.0f;
     float portalOpen  = 0.0f;
-    float rodaTheta   = 0.0f;   // sudut rotasi roda (akumulasi)
+    float rodaTheta   = 0.0f;
     float keretaX     = 260.0f, keretaY = SH/2.0f;
     float keretaAngle = 0.0f;
     float portalX     = SW * 0.72f, portalY = SH/2.0f;
@@ -451,7 +399,6 @@ int main(void) {
         float dt   = GetFrameTime();
         float time = GetTime();
 
-        // ── Input ───────────────────────────────────────────
         if (IsKeyPressed(KEY_SPACE) && fase == IDLE) {
             fase = CHARGE; faseTimer = 0.0f;
             startX = keretaX; startY = keretaY;
@@ -465,15 +412,11 @@ int main(void) {
         }
         if (IsKeyPressed(KEY_H)) showHUD = !showHUD;
 
-        // ── Update ──────────────────────────────────────────
         faseTimer += dt;
         portalRot += dt * (1.0f + warpFactor * 3.0f);
 
-        // Roda berputar makin cepat saat warp
-        // Kecepatan sudut roda ~ kecepatan linear kereta / radius roda
-        // omega = v / r,  v bertambah dengan warpFactor
-        float omega = (2.0f + warpFactor * 12.0f);  // rad/s
-        rodaTheta  -= omega * dt;   // minus = maju ke kanan (searah jarum jam)
+        float omega = (2.0f + warpFactor * 12.0f);
+        rodaTheta  -= omega * dt;
 
         if (fase == IDLE) {
             keretaY     = SH/2.0f + 6.0f * sinf(time * 1.0f);
@@ -491,12 +434,8 @@ int main(void) {
             }
         }
         else if (fase == WARP) {
-            // Kereta harus bergerak sampai EKOR (kiri) melewati portal.
-            // Ekor = keretaX - 110.
-            // Target: keretaX - 110 > portalX  →  keretaX > portalX + 110
-            // Jadi targetX = portalX + 120 (sedikit lewat agar ekor hilang)
             float targetX = portalX + 120.0f;
-            float dur     = 3.2f;   // lebih panjang agar masuk pelan-pelan
+            float dur     = 3.2f;
             float t       = clamp01(faseTimer / dur);
             float ease    = t * t;
             keretaX     = lerpF(startX, targetX, ease);
@@ -516,28 +455,17 @@ int main(void) {
 
         updateBintang(warpFactor, dt);
 
-        // ── Draw ────────────────────────────────────────────
         BeginDrawing();
         ClearBackground((Color){3,5,18,255});
 
-        drawBintang(warpFactor);
+        drawBintang(warpFactor); 
         drawPlanet(980, 150, 70, (Color){60,40,110,255});
         drawPlanet( 80, 560, 45, (Color){35,75,55, 255});
         drawPortal(portalX, portalY, 110.0f, portalRot, portalOpen);
 
-        // ── Gambar kereta dengan efek masuk portal ───────────────
-        // Teknik: BeginScissorMode(x, y, w, h) = clipping rectangle
-        //   → hanya piksel dalam kotak itu yang digambar
-        //
-        // Saat WARP, kita set clipX = portalX (garis portal).
-        // Bagian kereta di KANAN portalX otomatis terpotong/hilang.
-        // Hasilnya: kepala masuk duluan, ekor menyusul → efek "ditelan".
-        //
-        // Ditambah glow tipis di garis potongan agar terlihat natural.
-
         if (fase != DONE || faseTimer < 0.3f) {
             if (fase == WARP || fase == DONE) {
-                float kepalX = keretaX + 100.0f;  // ujung depan kereta
+                float kepalX = keretaX + 100.0f;
                 float clipX  = portalX;
 
                 int cx_int = (int)clipX;
@@ -547,18 +475,17 @@ int main(void) {
                     EndScissorMode();
                 }
 
-                // Glow di tepi potongan: kereta "ditelan" portal
                 if (kepalX >= clipX - 5.0f) {
                     float glowAlp = clamp01((kepalX - clipX + 5.0f) / 30.0f);
                     float glowH   = 50.0f;
-                    DrawLineEx(
-                        (Vector2){clipX, keretaY - glowH},
-                        (Vector2){clipX, keretaY + glowH},
-                        3.0f, (Color){150, 230, 255, (unsigned char)(200 * glowAlp)}
+                    Bres_ThickLine(
+                        (int)clipX, (int)(keretaY - glowH),
+                        (int)clipX, (int)(keretaY + glowH),
+                        3, (Color){150, 230, 255, (unsigned char)(200 * glowAlp)}
                     );
-                    DrawCircle(clipX, keretaY, glowH * 0.6f,
+                    MidcircleFilled((int)clipX, (int)keretaY, (int)(glowH * 0.6f),
                                (Color){0, 180, 255, (unsigned char)(40 * glowAlp)});
-                    DrawCircle(clipX, keretaY, glowH * 0.3f,
+                    MidcircleFilled((int)clipX, (int)keretaY, (int)(glowH * 0.3f),
                                (Color){100, 220, 255, (unsigned char)(80 * glowAlp)});
                 }
             } else {
@@ -566,7 +493,7 @@ int main(void) {
             }
         }
 
-        // ── HUD ─────────────────────────────────────────────
+        // HUD (UI Info tetap menggunakan Raylib primitives)
         if (showHUD) {
             DrawRectangle(10, 10, 310, 155, (Color){0,0,0,140});
             DrawRectangleLines(10, 10, 310, 155, (Color){0,180,255,80});

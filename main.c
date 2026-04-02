@@ -17,7 +17,7 @@
 #define PI 3.14159f
 #endif
 
-typedef enum { IDLE, CHARGE, WARP, DONE } Fase;
+typedef enum { INPUT_WARP, IDLE, CHARGE, WARP, DONE } Fase;
 
 // ── Bintang parallax ──────────────────────────────────────────
 typedef struct { float x, y, size, speed; } Bintang;
@@ -382,8 +382,8 @@ int main(void) {
     InitWindow(SW, SH, "Simulasi Warp Jump - Astral Express");
     SetTargetFPS(60);
     initBintang();
-
-    Fase  fase        = IDLE;
+    Fase fase = INPUT_WARP;
+    // Fase  fase        = IDLE;
     float faseTimer   = 0.0f;
     float warpFactor  = 0.0f;
     float portalOpen  = 0.0f;
@@ -394,6 +394,12 @@ int main(void) {
     float portalRot   = 0.0f;
     float startX, startY;
     bool showHUD = true;
+
+    // Variabel untuk Input & Loop Warp
+    int targetWarpCount = 1;      // Berapa kali harus lompat
+    int currentWarpCount = 0;     // Sudah lompat berapa kali
+    char inputText[10] = "\0";    // Buffer teks input
+    int letterCount = 0;          // Jumlah karakter input
 
     while (!WindowShouldClose()) {
         float dt   = GetFrameTime();
@@ -418,6 +424,34 @@ int main(void) {
         float omega = (2.0f + warpFactor * 12.0f);
         rodaTheta  -= omega * dt;
 
+        if (fase == INPUT_WARP) {
+            // Ambil input keyboard (Hanya angka)
+            int key = GetCharPressed();
+            while (key > 0) {
+                if ((key >= 48) && (key <= 57) && (letterCount < 5)) { // ASCII 48-57 adalah angka 0-9
+                    inputText[letterCount] = (char)key;
+                    inputText[letterCount+1] = '\0';
+                    letterCount++;
+                }
+                key = GetCharPressed();  // Cek jika ada tombol lain ditekan pada frame yang sama
+            }
+
+            // Hapus karakter (Backspace)
+            if (IsKeyPressed(KEY_BACKSPACE)) {
+                letterCount--;
+                if (letterCount < 0) letterCount = 0;
+                inputText[letterCount] = '\0';
+            }
+
+            // Mulai Warp saat tekan ENTER
+            if (IsKeyPressed(KEY_ENTER) && letterCount > 0) {
+                targetWarpCount = atoi(inputText); // Ubah teks ke integer
+                currentWarpCount = 0;
+                fase = IDLE;        // Mulai animasi
+                faseTimer = 0.0f;
+            }
+        }
+
         if (fase == IDLE) {
             keretaY     = SH/2.0f + 6.0f * sinf(time * 1.0f);
             keretaAngle = 0.02f * sinf(time * 0.7f);
@@ -434,7 +468,6 @@ int main(void) {
             }
         }
         else if (fase == WARP) {
-            // UBAH: Target X diperjauh menjadi 800 agar kereta ditarik masuk sepenuhnya
             float targetX = portalX + 800.0f; 
             float dur     = 3.2f;
             float t       = clamp01(faseTimer / dur);
@@ -445,11 +478,24 @@ int main(void) {
             warpFactor  = lerpF(0.3f, 1.0f, clamp01(t * 1.5f));
             keretaAngle = lerpF(0.0f, -0.05f, t);
             
-            // UBAH: Cek berdasarkan posisi EKOR kereta, bukan dari batas waktu (dur)
-            // Asumsi jarak dari titik keretaX ke ujung ekor adalah sekitar 600 pixel
+            // Cek jika kereta sudah masuk sepenuhnya
             if ((keretaX - 600.0f) > portalX) { 
-                fase = DONE; 
-                faseTimer = 0.0f; 
+                currentWarpCount++; // Tambah hitungan lompatan
+                
+                if (currentWarpCount < targetWarpCount) {
+                    // JIKA MASIH ADA SISA LOMPATAN: Reset animasi kembali ke IDLE
+                    fase = IDLE;
+                    faseTimer = 0.0f;
+                    portalOpen = 0.0f;
+                    warpFactor = 0.0f;
+                    keretaX = startX; // Kembalikan kereta ke kiri
+                    keretaY = startY;
+                    keretaAngle = 0.0f;
+                } else {
+                    // JIKA SUDAH SELESAI SEMUA: Masuk fase DONE
+                    fase = DONE; 
+                    faseTimer = 0.0f; 
+                }
             }
         }
         else if (fase == DONE) {
@@ -515,6 +561,36 @@ int main(void) {
             DrawText(TextFormat("FPS        : %d", GetFPS()),                     20, 132, 13, GREEN);
             DrawText("[SPACE] Warp   [R] Reset   [H] HUD",
                      18, SH-28, 13, (Color){160,200,255,200});
+        }
+        // ── RENDER MENU INPUT ──────────────────────────────────
+        if (fase == INPUT_WARP) {
+            // Buat background semi-transparan
+            DrawRectangle(0, 0, SW, SH, (Color){10, 15, 30, 200});
+            
+            int boxWidth = 500;
+            int boxHeight = 250;
+            int boxX = (SW - boxWidth) / 2;
+            int boxY = (SH - boxHeight) / 2;
+            
+            // Kotak Menu
+            DrawRectangle(boxX, boxY, boxWidth, boxHeight, (Color){20, 30, 50, 255});
+            DrawRectangleLines(boxX, boxY, boxWidth, boxHeight, (Color){0, 200, 255, 255});
+            
+            DrawText("ASTRAL EXPRESS NAVIGATOR", boxX + 50, boxY + 30, 28, (Color){0, 200, 255, 255});
+            DrawText("Masukkan Jumlah Warp Jump:", boxX + 50, boxY + 90, 20, WHITE);
+            
+            // Kotak Teks
+            DrawRectangle(boxX + 50, boxY + 130, 400, 50, BLACK);
+            DrawRectangleLines(boxX + 50, boxY + 130, 400, 50, GRAY);
+            DrawText(inputText, boxX + 65, boxY + 145, 24, YELLOW);
+            
+            // Cursor berkedip
+            if (((int)(GetTime() * 2)) % 2 == 0) {
+                int textWidth = MeasureText(inputText, 24);
+                DrawText("_", boxX + 65 + textWidth, boxY + 145, 24, YELLOW);
+            }
+            
+            DrawText("Tekan ENTER untuk memulai", boxX + 50, boxY + 200, 16, GRAY);
         }
 
         EndDrawing();

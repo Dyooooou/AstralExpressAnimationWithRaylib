@@ -155,7 +155,7 @@ void drawPortal(float cx, float cy, float r, float rotasi, float openFactor) {
     Color c_line_in = MyColorLerp((Color){150, 240, 255, 150}, (Color){255, 200, 240, 150}, openFactor);
     for (int i = 0; i < 6; i++) {
         Bres_ThickLine((int)pnts[i].x, (int)pnts[i].y, 
-                       (int)pnts[(i+1)%6].x, (int)pnts[(i+1)%6].y, 
+        (int)pnts[(i+1)%6].x, (int)pnts[(i+1)%6].y, 
                        2, c_line_in);
     }
 
@@ -434,15 +434,23 @@ int main(void) {
             }
         }
         else if (fase == WARP) {
-            float targetX = portalX + 120.0f;
+            // UBAH: Target X diperjauh menjadi 800 agar kereta ditarik masuk sepenuhnya
+            float targetX = portalX + 800.0f; 
             float dur     = 3.2f;
             float t       = clamp01(faseTimer / dur);
             float ease    = t * t;
+            
             keretaX     = lerpF(startX, targetX, ease);
             keretaY     = lerpF(startY, portalY, ease) - 30.0f * sinf(t * PI);
             warpFactor  = lerpF(0.3f, 1.0f, clamp01(t * 1.5f));
             keretaAngle = lerpF(0.0f, -0.05f, t);
-            if (faseTimer >= dur) { fase = DONE; faseTimer = 0.0f; }
+            
+            // UBAH: Cek berdasarkan posisi EKOR kereta, bukan dari batas waktu (dur)
+            // Asumsi jarak dari titik keretaX ke ujung ekor adalah sekitar 600 pixel
+            if ((keretaX - 600.0f) > portalX) { 
+                fase = DONE; 
+                faseTimer = 0.0f; 
+            }
         }
         else if (fase == DONE) {
             warpFactor = lerpF(1.0f, 0.0f, clamp01(faseTimer/1.5f));
@@ -465,7 +473,7 @@ int main(void) {
 
         if (fase != DONE || faseTimer < 0.3f) {
             if (fase == WARP || fase == DONE) {
-                float kepalX = keretaX + 100.0f;
+                float kepalX = keretaX + 300.0f;
                 float clipX  = portalX;
 
                 int cx_int = (int)clipX;

@@ -17,7 +17,7 @@
 #define PI 3.14159f
 #endif
 
-typedef enum { INPUT_WARP, IDLE, CHARGE, WARP, ARRIVAL, DONE } Fase;
+typedef enum { INPUT_WARP, IDLE, CHARGE, WARP, WARP_LOOP, ARRIVAL, DONE } Fase;
 
 // ── Bintang parallax ──────────────────────────────────────────
 typedef struct { float x, y, size, speed; } Bintang;
@@ -388,6 +388,8 @@ int main(void) {
     float warpFactor  = 0.0f;
     float portalOpen  = 0.0f;
     float rodaTheta   = 0.0f;
+    float leftPortalX = 150.0f;  // Posisi portal kiri
+    float leftPortalOpen = 0.0f; // Skala ukuran portal kiri (0.0 sampai 1.0)
     float keretaX     = 260.0f, keretaY = SH/2.0f;
     float keretaAngle = 0.0f;
     float portalX     = SW * 0.72f, portalY = SH/2.0f;
@@ -467,66 +469,81 @@ int main(void) {
                 startX = keretaX; startY = keretaY;
             }
         }
-        // ── LOGIKA WARP (Berulang tanpa henti jika > 1) ────────
+        // ── 1. LOGIKA WARP (Lompatan Pertama: Tengah ke Kanan) ─
         else if (fase == WARP) {
             float targetX = portalX + 800.0f; 
+            float dur     = 3.2f;
+            float t       = clamp01(faseTimer / dur);
+            float ease    = t * t;
             
-            // Jika lompatan pertama, durasinya normal. Jika lompatan lanjutan, lebih cepat!
-            float dur = (currentWarpCount == 0) ? 3.2f : 1.5f; 
-            float t   = clamp01(faseTimer / dur);
+            keretaX     = lerpF(startX, targetX, ease);
+            keretaY     = lerpF(startY, portalY, ease) - 30.0f * sinf(t * PI);
+            warpFactor  = lerpF(0.3f, 1.0f, clamp01(t * 1.5f));
+            keretaAngle = lerpF(0.0f, -0.05f, t);
             
-            // Lompatan pertama pakai Ease-In (Mulai lambat -> ngebut). Lompatan lanjutan konstan (Linear).
-            float ease = (currentWarpCount == 0) ? (t * t) : t;
-            
-            // Posisi awal: lompatan pertama dari startX, lompatan lanjutan muncul dari kiri luar layar
-            float currentStartX = (currentWarpCount == 0) ? startX : -800.0f;
-            
-            keretaX = lerpF(currentStartX, targetX, ease);
-            keretaY = lerpF(startY, portalY, ease) - 30.0f * sinf(t * PI);
-            
-            if (currentWarpCount == 0) {
-                // Lompatan Pertama: Regangkan kereta perlahan
-                warpFactor  = lerpF(0.3f, 1.0f, clamp01(t * 1.5f));
-                keretaAngle = lerpF(0.0f, -0.05f, t);
-            } else {
-                // Lompatan Lanjutan: Kereta dipertahankan DALAM KONDISI STRETCH MAKSIMAL
-                warpFactor  = 1.0f; 
-                keretaAngle = -0.05f;
-            }
-            
-            // Cek jika EKOR kereta sudah melewati portal
             if ((keretaX - 600.0f) > portalX) { 
                 currentWarpCount++; 
-                
                 if (currentWarpCount < targetWarpCount) {
-                    // MASIH ADA SISA LOMPATAN: Reset timer untuk lanjut WARP (tanpa hapus stretch)
-                    faseTimer = 0.0f; 
+                    fase = WARP_LOOP; // Lanjut loop (Kiri -> Kanan)
+                    faseTimer = 0.0f;
                 } else {
-                    // LOMPATAN TERAKHIR SELESAI: Masuk fase kedatangan (Arrival)
-                    fase = ARRIVAL; 
-                    faseTimer = 0.0f; 
+                    fase = ARRIVAL;   // Langsung mendarat jika inputnya 1
+                    faseTimer = 0.0f;
                 }
             }
         }
-        // ── LOGIKA ARRIVAL (Kedatangan setelah Warp Selesai) ───
+        // ── 2. LOGIKA WARP_LOOP (Lompatan Lanjutan: Kiri ke Kanan) ─
+        else if (fase == WARP_LOOP) {
+            float dur = 2.0f; 
+            float t = clamp01(faseTimer / dur);
+            
+            // 0.0 - 0.3: Portal kiri membesar dari nol
+            float tPortal = clamp01(t / 0.3f);
+            leftPortalOpen = lerpF(0.0f, 1.0f, tPortal);
+            
+            // 0.3 - 1.0: Kereta menembak keluar
+            float tKereta = clamp01((t - 0.3f) / 0.7f);
+            keretaX = lerpF(leftPortalX - 800.0f, portalX + 800.0f, tKereta);
+            keretaY = portalY; 
+            
+            warpFactor = 1.0f;   // Jaga kereta tetap stretch
+            keretaAngle = -0.05f;
+            
+            // Cek jika ekor sudah masuk ke portal kanan lagi
+            if ((keretaX - 600.0f) > portalX) {
+                currentWarpCount++;
+                if (currentWarpCount < targetWarpCount) {
+                    fase = WARP_LOOP; // Ulangi terus
+                    faseTimer = 0.0f;
+                } else {
+                    fase = ARRIVAL;   // Selesai, siapkan pendaratan
+                    faseTimer = 0.0f;
+                }
+            }
+        }
+        // ── 3. LOGIKA ARRIVAL (Mendarat di TENGAH Layar) ────────
         else if (fase == ARRIVAL) {
-            float targetX = SW - 400.0f; // Titik berhenti di SEBELAH KANAN layar
-            float dur     = 4.0f;        // Waktu pengereman
-            float t       = clamp01(faseTimer / dur);
+            float dur = 3.5f;
+            float t = clamp01(faseTimer / dur);
             
-            // Ease-Out: Kereta muncul sangat cepat, lalu melambat untuk berhenti
-            float easeOut = 1.0f - (1.0f - t) * (1.0f - t);
+            // Pastikan portal kiri membesar (jika lompatan cuma 1, portal ini baru muncul)
+            float tPortal = clamp01(t / 0.2f);
+            leftPortalOpen = lerpF(0.0f, 1.0f, tPortal);
             
-            // Kereta muncul dari kiri layar menuju kanan
-            keretaX     = lerpF(-800.0f, targetX, easeOut);
-            keretaY     = lerpF(portalY, startY, easeOut);
+            // Gerakan mengerem menuju TENGAH layar (SW / 2.0f)
+            float tKereta = clamp01((t - 0.2f) / 0.8f);
+            float easeOut = 1.0f - (1.0f - tKereta) * (1.0f - tKereta);
             
-            // Hilangkan efek Stretch kembali ke 0.0f (Normal)
+            keretaX = lerpF(leftPortalX - 800.0f, SW / 2.0f, easeOut);
+            keretaY = lerpF(portalY, startY, easeOut);
+            
+            // Kereta kembali ke bentuk normal
             warpFactor  = lerpF(1.0f, 0.0f, easeOut);
             keretaAngle = lerpF(-0.05f, 0.0f, easeOut);
             
-            // Tutup portal perlahan di latar belakang
-            portalOpen  = lerpF(1.0f, 0.0f, t);
+            // Di akhir pendaratan, tutup kedua portal!
+            portalOpen = lerpF(1.0f, 0.0f, tKereta);
+            leftPortalOpen = lerpF(1.0f, 0.0f, tKereta);
             
             if (faseTimer >= dur) {
                 fase = DONE;
@@ -551,41 +568,118 @@ int main(void) {
         drawPlanet( 80, 560, 45, (Color){35,75,55, 255});
         drawPortal(portalX, portalY, 110.0f, portalRot, portalOpen);
 
-        if (fase != DONE || faseTimer < 0.3f) {
-            if (fase == WARP || fase == CHARGE || fase == ARRIVAL || fase == DONE) {
-                float kepalX = keretaX + 300.0f;
-                float clipX  = portalX;
+        // ── GAMBAR PORTAL KIRI ──────────────────────────────────
+        if (leftPortalOpen > 0.0f) {
+            float pw = 100.0f * leftPortalOpen;
+            float ph = 400.0f * leftPortalOpen;
+            // Warnanya kubedakan sedikit (biru cerah) agar terlihat epik
+            DrawEllipse((int)leftPortalX, (int)portalY, pw, ph, (Color){50, 200, 255, 180});
+            DrawEllipse((int)leftPortalX, (int)portalY, pw * 0.7f, ph * 0.7f, (Color){150, 230, 255, 255});
+        }
 
-                int cx_int = (int)clipX;
-                if (cx_int > 0) {
-                    BeginScissorMode(0, 0, cx_int, SH);
-                        drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
-                    EndScissorMode();
-                }
-
-                if (kepalX >= clipX - 5.0f) {
-                    float glowAlp = clamp01((kepalX - clipX + 5.0f) / 30.0f);
-                    float glowH   = 50.0f;
-                    Bres_ThickLine(
-                        (int)clipX, (int)(keretaY - glowH),
-                        (int)clipX, (int)(keretaY + glowH),
-                        3, (Color){150, 230, 255, (unsigned char)(200 * glowAlp)}
-                    );
-                    MidcircleFilled((int)clipX, (int)keretaY, (int)(glowH * 0.6f),
-                               (Color){0, 180, 255, (unsigned char)(40 * glowAlp)});
-                    MidcircleFilled((int)clipX, (int)keretaY, (int)(glowH * 0.3f),
-                               (Color){100, 220, 255, (unsigned char)(80 * glowAlp)});
-                }
+        // ── GAMBAR KERETA DENGAN CLIPPING ───────────────────────
+        if (fase == IDLE || fase == CHARGE || fase == DONE) {
+            drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+        } 
+        else if (fase == WARP) {
+            float kepalX = keretaX + 300.0f;
+            if (kepalX > portalX) {
+                // Potong kepala kereta yang masuk ke portal kanan
+                BeginScissorMode(0, 0, (int)portalX, SH);
+                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                EndScissorMode();
             } else {
                 drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
             }
+        } 
+        else if (fase == WARP_LOOP) {
+            // Kereta diapit! Potong ekor di portal kiri, dan potong kepala di portal kanan
+            int clipStartX = (int)leftPortalX;
+            int clipWidth = (int)(portalX - leftPortalX);
+            BeginScissorMode(clipStartX, 0, clipWidth, SH);
+            drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+            EndScissorMode();
+        } 
+        else if (fase == ARRIVAL) {
+            // Potong ekor yang baru keluar dari portal kiri saja
+            int clipStartX = (int)leftPortalX;
+            int clipWidth = SW - clipStartX;
+            BeginScissorMode(clipStartX, 0, clipWidth, SH);
+            drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+            EndScissorMode();
+        }
+
+        if (leftPortalOpen > 0.0f) {
+            // Kita pakai fungsi drawPortal segienam milikmu! 
+            // Rotasinya diberi minus (-portalRot) agar putarannya berlawanan arah dengan portal kanan
+            drawPortal(leftPortalX, portalY, 110.0f, -portalRot, leftPortalOpen);
+        }
+
+        // if (fase != DONE || faseTimer < 0.3f) {
+        //     if (fase == WARP || fase == CHARGE || fase == ARRIVAL || fase == DONE) {
+        //         float kepalX = keretaX + 300.0f;
+        //         float clipX  = portalX;
+
+        //         int cx_int = (int)clipX;
+        //         if (cx_int > 0) {
+        //             BeginScissorMode(0, 0, cx_int, SH);
+        //                 drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+        //             EndScissorMode();
+        //         }
+
+        //         if (kepalX >= clipX - 5.0f) {
+        //             float glowAlp = clamp01((kepalX - clipX + 5.0f) / 30.0f);
+        //             float glowH   = 50.0f;
+        //             Bres_ThickLine(
+        //                 (int)clipX, (int)(keretaY - glowH),
+        //                 (int)clipX, (int)(keretaY + glowH),
+        //                 3, (Color){150, 230, 255, (unsigned char)(200 * glowAlp)}
+        //             );
+        //             MidcircleFilled((int)clipX, (int)keretaY, (int)(glowH * 0.6f),
+        //                        (Color){0, 180, 255, (unsigned char)(40 * glowAlp)});
+        //             MidcircleFilled((int)clipX, (int)keretaY, (int)(glowH * 0.3f),
+        //                        (Color){100, 220, 255, (unsigned char)(80 * glowAlp)});
+        //         }
+        //     } else {
+        //         drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+        //     }
+        // }
+        if (fase == IDLE || fase == CHARGE || fase == DONE) {
+            drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+        } 
+        else if (fase == WARP) {
+            float kepalX = keretaX + 300.0f;
+            if (kepalX > portalX) {
+                // Potong kepala kereta saat masuk portal kanan
+                BeginScissorMode(0, 0, (int)portalX, SH);
+                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                EndScissorMode();
+            } else {
+                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+            }
+        } 
+        else if (fase == WARP_LOOP) {
+            // Diapit 2 portal: Potong ekor di kiri, potong kepala di kanan
+            int clipStartX = (int)leftPortalX;
+            int clipWidth = (int)(portalX - leftPortalX);
+            BeginScissorMode(clipStartX, 0, clipWidth, SH);
+            drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+            EndScissorMode();
+        } 
+        else if (fase == ARRIVAL) {
+            // Potong ekor yang baru keluar dari portal kiri
+            int clipStartX = (int)leftPortalX;
+            int clipWidth = SW - clipStartX;
+            BeginScissorMode(clipStartX, 0, clipWidth, SH);
+            drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+            EndScissorMode();
         }
 
         // HUD (UI Info tetap menggunakan Raylib primitives)
         if (showHUD) {
             DrawRectangle(10, 10, 310, 155, (Color){0,0,0,140});
             DrawRectangleLines(10, 10, 310, 155, (Color){0,180,255,80});
-            const char* namaFase[] = {"IDLE","CHARGE","WARP","DONE"};
+            const char* namaFase[] = {"INPUT", "IDLE", "CHARGE", "WARP", "WARP_LOOP", "ARRIVAL", "DONE"};
             DrawText("Astral Express - Warp Jump", 20, 18, 16, (Color){0,210,255,255});
             DrawText(TextFormat("Fase       : %s",       namaFase[fase]),         20,  42, 13, WHITE);
             DrawText(TextFormat("Warp Factor: %.2f",     warpFactor),             20,  60, 13, WHITE);

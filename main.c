@@ -13,8 +13,10 @@
 #define SW 1920
 #define SH  1080
 #define NUM_STARS 150
+#define NUM_PLANETS 2
 #ifndef PI
 #define PI 3.14159f
+
 #endif
 
 typedef enum { INPUT_WARP, IDLE, CHARGE, WARP, WARP_LOOP, ARRIVAL, DONE } Fase;
@@ -22,6 +24,14 @@ typedef enum { INPUT_WARP, IDLE, CHARGE, WARP, WARP_LOOP, ARRIVAL, DONE } Fase;
 // ── Bintang parallax ──────────────────────────────────────────
 typedef struct { float x, y, size, speed; } Bintang;
 Bintang bintang[NUM_STARS];
+
+
+typedef struct {
+    float x, y;
+    float radius;
+    Color color;
+} Planet;
+Planet planets[NUM_PLANETS];
 
 void initBintang() {
     for (int i = 0; i < NUM_STARS; i++) {
@@ -62,6 +72,25 @@ void drawPlanet(float cx, float cy, float r, Color warna) {
                     (Color){warna.r+40, warna.g+40, warna.b+40, 80});
     MidcircleFilled((int)(cx + r*0.2f), (int)(cy + r*0.2f), (int)(r*0.7f), (Color){0,0,0,60});
     Midcircle((int)cx, (int)cy, (int)r, (Color){255,255,255,40});
+}
+
+void randomizePlanets() {
+    for (int i = 0; i < NUM_PLANETS; i++) {
+        // Acak posisi agar tidak terlalu menempel ke pinggir layar
+        planets[i].x = (float)GetRandomValue(150, SW - 150);
+        planets[i].y = (float)GetRandomValue(150, SH - 150);
+        
+        // Acak ukuran radius (misal dari 40 sampai 120)
+        planets[i].radius = (float)GetRandomValue(40, 120);
+        
+        // Acak warna (r, g, b dari 30 sampai 200 agar warnanya tidak terlalu gelap atau terlalu mencolok)
+        planets[i].color = (Color){
+            (unsigned char)GetRandomValue(30, 200),
+            (unsigned char)GetRandomValue(30, 200),
+            (unsigned char)GetRandomValue(30, 200),
+            255
+        };
+    }
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -382,6 +411,7 @@ int main(void) {
     InitWindow(SW, SH, "Simulasi Warp Jump - Astral Express");
     SetTargetFPS(60);
     initBintang();
+    randomizePlanets();
     Fase fase = INPUT_WARP;
     // Fase  fase        = IDLE;
     float faseTimer   = 0.0f;
@@ -453,6 +483,7 @@ int main(void) {
                 faseTimer = 0.0f;
                 // Simpan posisi kereta saat ini sebagai titik awal lompatan baru
                 startX = keretaX;
+                randomizePlanets();
             }
         }
 
@@ -571,8 +602,11 @@ int main(void) {
         ClearBackground((Color){3,5,18,255});
 
         drawBintang(warpFactor); 
-        drawPlanet(980, 150, 70, (Color){60,40,110,255});
-        drawPlanet( 80, 560, 45, (Color){35,75,55, 255});
+        // drawPlanet(980, 150, 70, (Color){60,40,110,255});
+        // drawPlanet( 80, 560, 45, (Color){35,75,55, 255});
+        for (int i = 0; i < NUM_PLANETS; i++) {
+            drawPlanet(planets[i].x, planets[i].y, planets[i].radius, planets[i].color);
+        }
         drawPortal(portalX, portalY, 110.0f, portalRot, portalOpen);
 
         // ── GAMBAR PORTAL KIRI ──────────────────────────────────

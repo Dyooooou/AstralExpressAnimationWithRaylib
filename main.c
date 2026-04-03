@@ -25,6 +25,7 @@ typedef enum { INPUT_WARP, IDLE, CHARGE, WARP, WARP_LOOP, ARRIVAL, DONE } Fase;
 typedef struct { float x, y, size, speed; } Bintang;
 Bintang bintang[NUM_STARS];
 
+bool showWireframe = false; 
 
 typedef struct {
     float x, y;
@@ -465,6 +466,10 @@ int main(void) {
             initBintang();
         }
         if (IsKeyPressed(KEY_H)) showHUD = !showHUD;
+
+        if (IsKeyPressed(KEY_T)) {
+            showWireframe = !showWireframe;
+        }
 
         faseTimer += dt;
         portalRot += dt * (1.0f + warpFactor * 3.0f);

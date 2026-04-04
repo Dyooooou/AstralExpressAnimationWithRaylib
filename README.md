@@ -14,7 +14,6 @@
 - [Transformasi 2D yang Digunakan](#transformasi-2d-yang-digunakan)
 - [Mekanisme Animasi](#mekanisme-animasi)
 - [Alur State Machine](#alur-state-machine)
-- [Referensi](#referensi)
 
 ---
 

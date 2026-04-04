@@ -9,5 +9,7 @@ void Bres_ThickLine(int x1, int y1, int x2, int y2, int thick, Color color);
 void Bres_DashDotLine(int x1, int y1, int x2, int y2, Color color);
 void FillTriangle(Vector2 a, Vector2 b, Vector2 c, Color color);
 void FillQuad(Vector2 a, Vector2 b, Vector2 c, Vector2 d, Color color);
+void RectanglesLines(int x, int y, int width, int height, Color color);
+void Algoritma_RectangleFilled(int x, int y, int width, int height, Color color);
 
 #endif

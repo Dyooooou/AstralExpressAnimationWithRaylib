@@ -130,10 +130,20 @@ void FillTriangle(Vector2 a, Vector2 b, Vector2 c, Color color) {
     }
 }
 
-// ════════════════════════════════════════════════════════════════
-//  FUNGSI BARU: Isi segi empat (quad) dengan 2 Segitiga Bresenham
-// ════════════════════════════════════════════════════════════════
 void FillQuad(Vector2 a, Vector2 b, Vector2 c, Vector2 d, Color color) {
     FillTriangle(a, b, c, color);
     FillTriangle(a, c, d, color);
+}
+
+void RectanglesLines(int x, int y, int width, int height, Color color) {
+    BresenhamLine(x,         y,          x + width, y,          color);
+    BresenhamLine(x + width, y,          x + width, y + height, color);
+    BresenhamLine(x + width, y + height, x,         y + height, color);
+    BresenhamLine(x,         y + height, x,         y,          color);
+}
+ 
+void Algoritma_RectangleFilled(int x, int y, int width, int height, Color color) {
+    for (int i = 0; i < height; i++) {
+        BresenhamLine(x, y + i, x + width, y + i, color);
+    }
 }

@@ -1,9 +1,12 @@
 #ifndef MENU_H
 #define MENU_H
 
-void drawMainMenu();
-void drawGuide();
-void drawMekanisme(float timer);
+extern int  menuOption;
+extern int  mekanismeSlide;
+extern float mekanismeTimer;
 
+void drawMainMenu(void);
+void drawGuide(void);
+void drawMekanisme(float timer);
 
 #endif

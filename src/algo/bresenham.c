@@ -89,9 +89,6 @@ void Bres_DashDotLine(int x1, int y1, int x2, int y2, Color color) {
     }
 }
 
-// ════════════════════════════════════════════════════════════════
-//  FUNGSI BARU: Isi segitiga dengan scan-line menggunakan Bresenham
-// ════════════════════════════════════════════════════════════════
 void FillTriangle(Vector2 a, Vector2 b, Vector2 c, Color color) {
     // Urutkan titik berdasarkan Y (a.y <= b.y <= c.y)
     if (b.y < a.y) { Vector2 tmp = a; a = b; b = tmp; }

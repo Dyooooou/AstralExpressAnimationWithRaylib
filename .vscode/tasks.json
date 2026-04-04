@@ -1,0 +1,51 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Compile Raylib",
+            "type": "process",
+            "command": "C:/raylib/w64devkit/bin/gcc.exe",
+            "args": [
+                "-fdiagnostics-color=always",
+                "-g",
+                "-I",
+                "${workspaceFolder}",
+                "${workspaceFolder}\\main.c",
+                "${workspaceFolder}\\src\\algo\\bresenham.c",
+                "${workspaceFolder}\\src\\algo\\dda.c",
+                "${workspaceFolder}\\src\\algo\\midcircle.c",
+                "${workspaceFolder}\\src\\core\\utils.c",
+                "${workspaceFolder}\\src\\world\\bintang.c",
+                "${workspaceFolder}\\src\\world\\planet.c",
+                "${workspaceFolder}\\src\\world\\portal.c",
+                "${workspaceFolder}\\src\\world\\kereta.c",
+                "${workspaceFolder}\\src\\screens\\menu.c",
+                "-o",
+                "${workspaceFolder}\\main.exe",
+                "-O1",
+                "-Wall",
+                "-Wno-missing-braces",
+                "-I", "C:\\raylib\\raylib\\src",
+                "-L", "C:\\raylib\\raylib\\src",
+                "-lraylib",
+                "-lopengl32",
+                "-lgdi32",
+                "-lwinmm"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ]
+}

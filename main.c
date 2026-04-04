@@ -19,9 +19,11 @@
 
 #endif
 
-typedef enum { INPUT_WARP, IDLE, CHARGE, WARP, WARP_LOOP, ARRIVAL, DONE } Fase;
+typedef enum { MAIN_MENU, MENU_GUIDE, MENU_MEKANISME, INPUT_WARP, IDLE, CHARGE, WARP, WARP_LOOP, ARRIVAL, DONE } Fase;
 
-// ── Bintang parallax ──────────────────────────────────────────
+
+int menuOption = 0;         // 0: Play, 1: Guide, 2: Mekanisme, 3: Exit
+float mekanismeTimer = 0.0f; 
 typedef struct { float x, y, size, speed; } Bintang;
 Bintang bintang[NUM_STARS];
 
@@ -476,6 +478,92 @@ void drawKereta(float cx, float cy, float angle, float warpFactor, float rodaThe
     #undef TPOS
 }
 
+void Algoritma_RectangleLines(int x, int y, int width, int height, Color color) {
+    // Garis Atas
+    BresenhamLine(x, y, x + width, y, color);
+    // Garis Kanan
+    BresenhamLine(x + width, y, x + width, y + height, color);
+    // Garis Bawah
+    BresenhamLine(x + width, y + height, x, y + height, color);
+    // Garis Kiri
+    BresenhamLine(x, y + height, x, y, color);
+}
+
+// ── FUNGSI RENDER MENU ───────────────────────────────────────────
+void drawMainMenu() {
+    DrawText("ASTRAL EXPRESS SIMULATOR", SW/2 - 250, 200, 40, WHITE);
+    DrawText("Gunakan Panah Atas/Bawah dan ENTER", SW/2 - 180, 260, 20, GRAY);
+
+    const char* options[] = { "1. PLAY SIMULATION", "2. GUIDE / KONTROL", "3. MEKANISME ANIMASI", "4. EXIT" };
+    
+    for (int i = 0; i < 4; i++) {
+        Color textColor = (i == menuOption) ? YELLOW : WHITE;
+        if (i == menuOption) {
+            // Kotak highlight menggunakan algoritma Bresenham buatan sendiri
+            Algoritma_RectangleLines(SW/2 - 160, 400 + i * 60 - 10, 320, 40, YELLOW);
+        }
+        DrawText(options[i], SW/2 - 140, 400 + i * 60, 20, textColor);
+    }
+}
+
+void drawGuide() {
+    DrawText("GUIDE / KONTROL SIMULASI", 100, 100, 40, WHITE);
+    DrawText("- [SPACE] : Memulai Proses Warp Jump (Charge -> Warp)", 100, 200, 20, WHITE);
+    DrawText("- [R]     : Mereset simulasi ke titik awal", 100, 250, 20, WHITE);
+    DrawText("- [T]     : Toggle Mode Outline (Bounding Box & Primitif Blueprint)", 100, 300, 20, WHITE);
+    DrawText("- [H]     : Sembunyikan/Tampilkan HUD Informasi Bawah", 100, 350, 20, WHITE);
+    DrawText("Tekan [ENTER] atau [BACKSPACE] untuk kembali ke Menu Utama", 100, SH - 100, 20, YELLOW);
+}
+
+void drawMekanisme(float timer) {
+    DrawText("BEDAH MEKANISME & KINEMATIKA", 100, 80, 35, WHITE);
+    DrawText("Tekan [ENTER] untuk kembali", 100, SH - 80, 20, YELLOW);
+
+    // --- 1. MEKANISME STRETCH (WARP DEFORMATION) ---
+    DrawText("1. DEFORMASI LINIER (WARP STRETCH)", 100, 180, 25, GREEN);
+    DrawText("Rumus: Panjang = BasePanjang * (1.0 + WarpFactor * Konstanta)", 100, 220, 20, WHITE);
+    DrawText("Logika: Skala objek ditarik berdasarkan kecepatan akselerasi untuk efek visual kecepatan cahaya.", 100, 250, 20, GRAY);
+    
+    // Animasi Stretch: Warp factor simulasi menggunakan sinus (naik turun 0 ke 1)
+    float simWarpFactor = (sinf(timer * 3.0f) + 1.0f) * 0.5f; 
+    int baseWidth = 200;
+    int currentWidth = baseWidth + (int)(baseWidth * simWarpFactor * 1.5f);
+    
+    // Gambar kotak kereta simulasi (pakai primitif Bresenham)
+    Algoritma_RectangleLines(100, 300, currentWidth, 60, WHITE);
+    // Info real-time
+    DrawText(TextFormat("WarpFactor: %.2f | Panjang: %d px", simWarpFactor, currentWidth), 100, 380, 20, YELLOW);
+
+    // --- 2. MEKANISME CONNECTING ROD (KINEMATIKA RODA) ---
+    DrawText("2. KINEMATIKA CONNECTING ROD (RODA KERETA)", 800, 180, 25, GREEN);
+    DrawText("Rumus Parametrik Lingkaran:", 800, 220, 20, WHITE);
+    DrawText("X = Cx + r * cos(theta)", 800, 250, 20, WHITE);
+    DrawText("Y = Cy + r * sin(theta)", 800, 280, 20, WHITE);
+    DrawText("Logika: Batang penghubung (rod) mengikat dua titik poros yang diputar bersamaan.", 800, 320, 20, GRAY);
+
+    // Animasi Roda
+    float theta = timer * -5.0f; // Rotasi berlawanan jarum jam
+    int w1X = 850, w2X = 1100, wY = 450, radius = 50, porosOffset = 25;
+    
+    // Gambar roda primitif
+    Midcircle(w1X, wY, radius, WHITE);
+    Midcircle(w2X, wY, radius, WHITE);
+    Midcircle(w1X, wY, 3, RED); // Titik pusat
+    Midcircle(w2X, wY, 3, RED);
+    
+    // Titik poros connecting rod
+    int p1X = w1X + (int)(cosf(theta) * porosOffset);
+    int p1Y = wY + (int)(sinf(theta) * porosOffset);
+    int p2X = w2X + (int)(cosf(theta) * porosOffset);
+    int p2Y = wY + (int)(sinf(theta) * porosOffset);
+    
+    // Gambar engsel
+    Midcircle(p1X, p1Y, 5, YELLOW);
+    Midcircle(p2X, p2Y, 5, YELLOW);
+    // Gambar Connecting Rod (Bresenham)
+    BresenhamLine(p1X, p1Y, p2X, p2Y, WHITE);
+}
+
 float lerpF(float a, float b, float t) { return a + (b-a)*t; }
 float clamp01(float t) { return t<0?0:(t>1?1:t); }
 
@@ -485,7 +573,7 @@ int main(void) {
     SetTargetFPS(60);
     initBintang();
     randomizePlanets();
-    Fase fase = INPUT_WARP;
+    Fase fase = MAIN_MENU;
     // Fase  fase        = IDLE;
     float faseTimer   = 0.0f;
     float warpFactor  = 0.0f;
@@ -509,6 +597,27 @@ int main(void) {
     while (!WindowShouldClose()) {
         float dt   = GetFrameTime();
         float time = GetTime();
+
+        if (fase == MAIN_MENU) {
+            if (IsKeyPressed(KEY_DOWN)) menuOption = (menuOption + 1) % 4;
+            if (IsKeyPressed(KEY_UP)) menuOption = (menuOption + 3) % 4;
+            
+            if (IsKeyPressed(KEY_ENTER)) {
+                if (menuOption == 0) fase = INPUT_WARP;       // Masuk ke game
+                else if (menuOption == 1) fase = MENU_GUIDE;  // Masuk ke guide
+                else if (menuOption == 2) fase = MENU_MEKANISME; // Masuk ke mekanisme
+                else if (menuOption == 3) break; // Keluar dari while loop (Exit program)
+            }
+        } 
+        else if (fase == MENU_GUIDE || fase == MENU_MEKANISME) {
+            // Update timer jika di menu mekanisme
+            if (fase == MENU_MEKANISME) mekanismeTimer += dt;
+            
+            // Kembali ke menu jika tekan ENTER atau BACKSPACE
+            if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_ESCAPE)) {
+                fase = MAIN_MENU;
+            }
+        }
 
         if (IsKeyPressed(KEY_SPACE) && fase == IDLE) {
             fase = CHARGE; faseTimer = 0.0f;
@@ -666,7 +775,7 @@ int main(void) {
             // Kereta diam di tengah.
             // Tunggu pengguna menekan ENTER untuk membuka menu input lagi
             if (IsKeyPressed(KEY_ENTER)) {
-                fase = INPUT_WARP; 
+                fase = INPUT_WARP;
                 // PERHATIKAN: Kita TIDAK mereset keretaX ke 260.0f
                 // Kereta dibiarkan di posisi terakhirnya (di tengah)
                 
@@ -676,11 +785,11 @@ int main(void) {
         }
 
         updateBintang(warpFactor, dt);
-        updateBintang(warpFactor, dt);
         updatePlanets(warpFactor, dt);
 
         BeginDrawing();
         ClearBackground((Color){3,5,18,255});
+
 
         drawBintang(warpFactor); 
         // drawPlanet(980, 150, 70, (Color){60,40,110,255});
@@ -688,6 +797,15 @@ int main(void) {
         for (int i = 0; i < NUM_PLANETS; i++) {
             drawPlanet(planets[i].x, planets[i].y, planets[i].radius, planets[i].color);
         }
+        if (fase == MAIN_MENU) {
+            drawMainMenu();
+        } 
+        else if (fase == MENU_GUIDE) {
+            drawGuide();
+        } 
+        else if (fase == MENU_MEKANISME) {
+            drawMekanisme(mekanismeTimer);
+        }else {
         drawPortal(portalX, portalY, 110.0f, portalRot, portalOpen);
 
         // ── GAMBAR PORTAL KIRI ──────────────────────────────────
@@ -732,36 +850,6 @@ int main(void) {
             // Rotasinya diberi minus (-portalRot) agar putarannya berlawanan arah dengan portal kanan
             drawPortal(leftPortalX, portalY, 110.0f, -portalRot, leftPortalOpen);
         }
-
-        // if (fase != DONE || faseTimer < 0.3f) {
-        //     if (fase == WARP || fase == CHARGE || fase == ARRIVAL || fase == DONE) {
-        //         float kepalX = keretaX + 300.0f;
-        //         float clipX  = portalX;
-
-        //         int cx_int = (int)clipX;
-        //         if (cx_int > 0) {
-        //             BeginScissorMode(0, 0, cx_int, SH);
-        //                 drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
-        //             EndScissorMode();
-        //         }
-
-        //         if (kepalX >= clipX - 5.0f) {
-        //             float glowAlp = clamp01((kepalX - clipX + 5.0f) / 30.0f);
-        //             float glowH   = 50.0f;
-        //             Bres_ThickLine(
-        //                 (int)clipX, (int)(keretaY - glowH),
-        //                 (int)clipX, (int)(keretaY + glowH),
-        //                 3, (Color){150, 230, 255, (unsigned char)(200 * glowAlp)}
-        //             );
-        //             MidcircleFilled((int)clipX, (int)keretaY, (int)(glowH * 0.6f),
-        //                        (Color){0, 180, 255, (unsigned char)(40 * glowAlp)});
-        //             MidcircleFilled((int)clipX, (int)keretaY, (int)(glowH * 0.3f),
-        //                        (Color){100, 220, 255, (unsigned char)(80 * glowAlp)});
-        //         }
-        //     } else {
-        //         drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
-        //     }
-        // }
         if (fase == IDLE || fase == CHARGE || fase == DONE) {
             drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
         } 
@@ -797,7 +885,9 @@ int main(void) {
         if (showHUD) {
             DrawRectangle(10, 10, 310, 155, (Color){0,0,0,140});
             DrawRectangleLines(10, 10, 310, 155, (Color){0,180,255,80});
-            const char* namaFase[] = {"INPUT", "IDLE", "CHARGE", "WARP", "WARP_LOOP", "ARRIVAL", "DONE"};
+            const char* namaFase[] = {"MAIN_MENU","MENU_GUIDE","MENU_MEKANISME",
+                "INPUT_WARP","IDLE","CHARGE","WARP",
+                "WARP_LOOP","ARRIVAL","DONE"};
             DrawText("Astral Express - Warp Jump", 20, 18, 16, (Color){0,210,255,255});
             DrawText(TextFormat("Fase       : %s",       namaFase[fase]),         20,  42, 13, WHITE);
             DrawText(TextFormat("Warp Factor: %.2f",     warpFactor),             20,  60, 13, WHITE);
@@ -807,6 +897,7 @@ int main(void) {
             DrawText(TextFormat("FPS        : %d", GetFPS()),                     20, 132, 13, GREEN);
             DrawText("[SPACE] Warp   [R] Reset   [H] HUD",
                      18, SH-28, 13, (Color){160,200,255,200});
+        }
         }
         // ── RENDER MENU INPUT ──────────────────────────────────
         if (fase == INPUT_WARP) {

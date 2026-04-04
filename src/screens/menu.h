@@ -1,7 +1,9 @@
 #ifndef MENU_H
 #define MENU_H
 
-void DrawMenu(void);
-int GetClickedProgram(void);
+void drawMainMenu();
+void drawGuide();
+void drawMekanisme(float timer);
+
 
 #endif

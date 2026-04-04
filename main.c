@@ -58,8 +58,8 @@ int main(void) {
         else if (fase == MENU_GUIDE || fase == MENU_MEKANISME) {
             if (fase == MENU_MEKANISME) {
                 mekanismeTimer += dt;
-                if (IsKeyPressed(KEY_RIGHT)) mekanismeSlide = (mekanismeSlide + 1) % 3;
-                if (IsKeyPressed(KEY_LEFT))  mekanismeSlide = (mekanismeSlide + 2) % 3;
+                if (IsKeyPressed(KEY_RIGHT)) mekanismeSlide = (mekanismeSlide + 1) % 4;
+                if (IsKeyPressed(KEY_LEFT))  mekanismeSlide = (mekanismeSlide + 2) % 4;
             }
             if (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_BACKSPACE) || IsKeyPressed(KEY_ESCAPE))
                 fase = MAIN_MENU;

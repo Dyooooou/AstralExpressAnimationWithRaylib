@@ -55,6 +55,8 @@ void drawBintang(float warpFactor, Vector2 offset) {
                 int thick = (int)(bintang[i].size * 0.8f);
                 if (thick < 1) thick = 1;
                 int endX = (int)(cx + streak); 
+                if (endX > SW) endX = SW; 
+                if (cx < 0) cx = 0;
                 Color starColor = (Color){200, 220, 255, 200};
                 if (warpFactor > 0.8f) {
                     starColor = (Color){255, 255, 255, 255}; 

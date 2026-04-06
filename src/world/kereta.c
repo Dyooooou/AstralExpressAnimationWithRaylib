@@ -238,22 +238,18 @@ void initTrail() {
     }
 }
 
-// Fungsi untuk memunculkan partikel baru di belakang kereta
-// rx, ry adalah koordinat bagian ekor/belakang kereta
+
 void spawnTrailParticle(float rx, float ry, float warpFactor) {
-    // Hanya spawn jejak cahaya jika kereta melaju lumayan kencang
     if (warpFactor < 0.1f) return; 
 
     for (int i = 0; i < NUM_TRAIL_PARTICLES; i++) {
         if (!trails[i].active) {
             trails[i].x = rx;
-            // Beri sedikit posisi acak pada sumbu Y agar trail terlihat dinamis
             trails[i].y = ry + (rand() % 10 - 5); 
-            trails[i].status = 1.0f; // Nyawa penuh
-            // Semakin tinggi warp, partikel makin besar
+            trails[i].status = 1.0f;
             trails[i].size = 5.0f + (warpFactor * 8.0f); 
             trails[i].active = true;
-            break; // Hanya spawn satu partikel per panggilan
+            break;
         }
     }
 }

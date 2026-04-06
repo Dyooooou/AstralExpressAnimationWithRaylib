@@ -217,10 +217,32 @@ int main(void) {
 
         updateTrail(warpFactor, dt);
         if (warpFactor > 0.1f) {
-            // Ekor kereta berada di belakang keretaX. 
-            // Angka -150 (X) dan +30 (Y) ini adalah perkiraan posisi knalpot/belakang kereta.
-            // Silakan ubah angkanya jika posisinya kurang pas dengan gambar keretamu.
+            // 1. Trail dari Ekor / Bagian Belakang Kereta
             spawnTrailParticle(keretaX - 150.0f, keretaY + 30.0f, warpFactor); 
+            
+            // 2. Trail dari Roda Depan (Bawah depan)
+            // Angka +120 (X) dan +70 (Y) ini adalah perkiraan posisi roda depan.
+            // Silakan sesuaikan angka ini jika posisinya meleset dari gambar rodamu.
+            spawnTrailParticle(keretaX + 120.0f, keretaY + 70.0f, warpFactor);
+
+            // 3. (Opsional) Trail dari Roda Belakang agar lebih seimbang
+            spawnTrailParticle(keretaX - 80.0f, keretaY + 70.0f, warpFactor);
+        }
+
+        if (warpFactor > 0.1f && (fase == CHARGE || fase == WARP || fase == WARP_LOOP)) {
+            spawnTrailParticle(keretaX - 150.0f, keretaY + 30.0f, warpFactor);
+            spawnTrailParticle(keretaX + 120.0f, keretaY + 70.0f, warpFactor);
+            spawnTrailParticle(keretaX - 80.0f, keretaY + 70.0f, warpFactor);
+        } else if (fase == ARRIVAL || fase == DONE) {
+            // Mempercepat fade-out partikel setelah kereta hilang
+            for (int i = 0; i < NUM_TRAIL_PARTICLES; i++) {
+                if (trails[i].active) {
+                    trails[i].status -= 10.0f * dt;
+                    if (trails[i].status <= 0.0f) {
+                        trails[i].active = false;
+                    }
+                }
+            }
         }
         drawTrail(shakeOffset);
 

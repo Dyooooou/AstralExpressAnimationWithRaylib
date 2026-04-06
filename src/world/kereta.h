@@ -3,7 +3,7 @@
 
 #include "raylib.h"
 
-#define NUM_TRAIL_PARTICLES 100
+#define NUM_TRAIL_PARTICLES 300
 typedef struct {
     float x;
     float y;
@@ -12,6 +12,7 @@ typedef struct {
     bool active;
 } TrailParticle;
 
+extern TrailParticle trails[NUM_TRAIL_PARTICLES];
 
 void drawRoda(float cx, float cy, float r, float angle, Color color);
 void drawKereta(float cx, float cy, float angle, float warpFactor, float rodaTheta);

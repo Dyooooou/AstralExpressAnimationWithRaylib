@@ -296,21 +296,28 @@ int main(void) {
                     "INPUT_WARP", "IDLE", "CHARGE", "WARP",
                     "WARP_LOOP", "ARRIVAL", "DONE"
                 };
-                DrawRectangle(10, 10, 310, 175, (Color){0, 0, 0, 140});
-                DrawRectangleLines(10, 10, 310, 175, (Color){0, 180, 255, 80});
+                DrawRectangle(10, 10, 310, 155, (Color){0, 0, 0, 140});
+                DrawRectangleLines(10, 10, 310, 155, (Color){0, 180, 255, 80});
                 DrawText("Astral Express - Warp Jump",                             20,  18, 16, (Color){0, 210, 255, 255});
                 DrawText(TextFormat("Fase       : %s",       namaFase[fase]),      20,  42, 13, WHITE);
                 DrawText(TextFormat("Warp Factor: %.2f",     warpFactor),          20,  60, 13, WHITE);
                 DrawText(TextFormat("Portal     : %.2f",     portalOpen),          20,  78, 13, WHITE);
                 DrawText(TextFormat("Roda theta : %.1f deg", rodaTheta*180/PI),    20,  96, 13, WHITE);
-                DrawText(TextFormat("Kereta XY  : (%.0f,%.0f)", keretaX, keretaY),20, 114, 13, WHITE);
-                DrawRectangle(20, 136, 260, 14, (Color){20, 40, 65, 220});
-                DrawRectangle(20, 136, (int)(clamp01(warpFactor) * 260.0f), 14, (Color){0, 180, 255, 220});
-                DrawRectangleLines(20, 136, 260, 14, (Color){0, 200, 255, 180});
-                DrawText("Warp Meter", 20, 118, 13, WHITE);
-                DrawText(TextFormat("%d%%", (int)(clamp01(warpFactor) * 100.0f)), 290, 136, 13, WHITE);
                 DrawText(TextFormat("FPS        : %d", GetFPS()),                  20, 154, 13, GREEN);
                 DrawText("[SPACE] Warp   [R] Reset   [H] HUD", 18, SH - 28, 13, (Color){160, 200, 255, 200});
+            }
+            if (showHUD) {
+                int barWidth = 260;
+                int barHeight = 14;
+                int barX = (SW - barWidth) / 2;
+                int barY = SH - 50;
+                int labelY = barY - 18;
+                int percentX = barX + barWidth + 10;
+                DrawRectangle(barX, barY, barWidth, barHeight, (Color){20, 40, 65, 220});
+                DrawRectangle(barX, barY, (int)(clamp01(warpFactor) * barWidth), barHeight, (Color){0, 180, 255, 220});
+                DrawRectangleLines(barX, barY, barWidth, barHeight, (Color){0, 200, 255, 180});
+                DrawText("Warp Meter", barX, labelY, 13, WHITE);
+                DrawText(TextFormat("%d%%", (int)(clamp01(warpFactor) * 100.0f)), percentX, barY, 13, WHITE);
             }
         }
 

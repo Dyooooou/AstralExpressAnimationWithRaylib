@@ -5,6 +5,7 @@
 #include "../algo/midcircle.h"
 #include "../algo/dda.h"
 #include <math.h>
+#include <stdlib.h>
 
 #define T(lx, ly) (Vector2){ \
     cx + ((lx * scale) * sx) * cosA - ((ly * scale) * sy) * sinA, \
@@ -15,6 +16,8 @@
     cx + (lx * scale) * cosA - (ly * scale) * sinA, \
     cy + (lx * scale) * sinA + (ly * scale) * cosA  \
 }
+
+TrailParticle trails[NUM_TRAIL_PARTICLES];
 
 void drawRoda(float cx, float cy, float r, float angle, Color color) {
     MidcircleFilled((int)cx, (int)cy, (int)r, color);
@@ -226,4 +229,73 @@ void drawKereta(float cx, float cy, float angle, float warpFactor, float rodaThe
 
     #undef T
     #undef TPOS
+}
+
+// Panggil ini sekali di awal (misal di dalam initKereta)
+void initTrail() {
+    for (int i = 0; i < NUM_TRAIL_PARTICLES; i++) {
+        trails[i].active = false;
+    }
+}
+
+// Fungsi untuk memunculkan partikel baru di belakang kereta
+// rx, ry adalah koordinat bagian ekor/belakang kereta
+void spawnTrailParticle(float rx, float ry, float warpFactor) {
+    // Hanya spawn jejak cahaya jika kereta melaju lumayan kencang
+    if (warpFactor < 0.1f) return; 
+
+    for (int i = 0; i < NUM_TRAIL_PARTICLES; i++) {
+        if (!trails[i].active) {
+            trails[i].x = rx;
+            // Beri sedikit posisi acak pada sumbu Y agar trail terlihat dinamis
+            trails[i].y = ry + (rand() % 10 - 5); 
+            trails[i].status = 1.0f; // Nyawa penuh
+            // Semakin tinggi warp, partikel makin besar
+            trails[i].size = 5.0f + (warpFactor * 8.0f); 
+            trails[i].active = true;
+            break; // Hanya spawn satu partikel per panggilan
+        }
+    }
+}
+
+// Panggil fungsi ini di dalam updateKereta atau update utama
+void updateTrail(float warpFactor, float dt) {
+    for (int i = 0; i < NUM_TRAIL_PARTICLES; i++) {
+        if (trails[i].active) {
+            // Kecepatan partikel bergerak ke kiri (tertinggal oleh kereta)
+            float speedX = 200.0f + (warpFactor * 600.0f);
+            trails[i].x -= speedX * dt;
+            
+            // Nyawa partikel berkurang (fade out)
+            // Bisa diatur angkanya agar fade-nya pas (makin besar angka, makin cepat hilang)
+            trails[i].status -= 2.5f * dt; 
+            
+            if (trails[i].status <= 0.0f) {
+                trails[i].active = false; // Matikan partikel jika nyawanya habis
+            }
+        }
+    }
+}
+
+// Panggil ini di fungsi draw, jangan lupa gunakan offset untuk camera shake
+void drawTrail(Vector2 offset) {
+    for (int i = 0; i < NUM_TRAIL_PARTICLES; i++) {
+        if (trails[i].active) {
+            int cx = (int)(trails[i].x + offset.x);
+            int cy = (int)(trails[i].y + offset.y);
+            
+            // Hitung alpha (transparansi) berdasarkan status
+            // status = 1.0 (255, solid), status = 0.0 (0, tak terlihat)
+            unsigned char alpha = (unsigned char)(trails[i].status * 255.0f);
+            
+            // Warna jejak cahaya (misalnya Cyan / Biru terang ala Sci-Fi)
+            Color trailColor = (Color){0, 200, 255, alpha};
+            
+            // Menggambar trail dengan ukuran yang juga menyusut perlahan
+            int currentSize = (int)(trails[i].size * trails[i].status);
+            if (currentSize < 1) currentSize = 1;
+
+            MidcircleFilled(cx, cy, currentSize, trailColor);
+        }
+    }
 }

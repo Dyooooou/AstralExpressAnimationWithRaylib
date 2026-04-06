@@ -17,6 +17,7 @@ int main(void) {
     SetTargetFPS(60);
 
     initBintang();
+    initTrail();
     randomizePlanets();
 
     Fase  fase         = MAIN_MENU;
@@ -213,6 +214,15 @@ int main(void) {
         // ── Update Dunia ─────────────────────────────────────────
         updateBintang(warpFactor, dt);
         updatePlanets(warpFactor, dt);
+
+        updateTrail(warpFactor, dt);
+        if (warpFactor > 0.1f) {
+            // Ekor kereta berada di belakang keretaX. 
+            // Angka -150 (X) dan +30 (Y) ini adalah perkiraan posisi knalpot/belakang kereta.
+            // Silakan ubah angkanya jika posisinya kurang pas dengan gambar keretamu.
+            spawnTrailParticle(keretaX - 150.0f, keretaY + 30.0f, warpFactor); 
+        }
+        drawTrail(shakeOffset);
 
         // ── Render ───────────────────────────────────────────────
         BeginDrawing();

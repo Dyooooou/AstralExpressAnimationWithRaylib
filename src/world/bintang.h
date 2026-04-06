@@ -14,6 +14,6 @@ extern bool showOutline;
 
 void initBintang(void);
 void updateBintang(float warpFactor, float dt);
-void drawBintang(float warpFactor);
+void drawBintang(float warpFactor, Vector2 offset);
 
 #endif

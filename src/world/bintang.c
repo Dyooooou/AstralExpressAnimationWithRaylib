@@ -12,6 +12,11 @@ void initBintang(void) {
         bintang[i].x     = rand() % SW;
         bintang[i].y     = rand() % SH;
         bintang[i].size  = 1.0f + (rand() % 3);
+        // if (bintang[i].size > 2.5f) {
+        //     bintang[i].speed = 20.0f + (rand() % 60);
+        // } else {
+        //     bintang[i].speed = 2.5f + (rand() % 60);
+        // }
         bintang[i].speed = 20.0f + (rand() % 60);
     }
 }
@@ -23,23 +28,27 @@ void updateBintang(float warpFactor, float dt) {
     }
 }
 
-void drawBintang(float warpFactor) {
+void drawBintang(float warpFactor, Vector2 offset) {
     for (int i = 0; i < NUM_STARS; i++) {
+        float cx = bintang[i].x + offset.x;
+        float cy = bintang[i].y + offset.y;
         if (showOutline) {
-            Midcircle((int)bintang[i].x, (int)bintang[i].y, (int)bintang[i].size, GREEN);
+            Midcircle((int)cx, (int)cy, (int)bintang[i].size, GREEN);
         } else {
             if (warpFactor > 0.2f) {
-                float streak = warpFactor * bintang[i].speed * 0.3f;
+                float streak = warpFactor * bintang[i].speed * 20.0f;
                 int thick = (int)(bintang[i].size * 0.7f);
                 if (thick < 1) thick = 1;
+                int endX = (int)(cx - streak);
+                if (endX < 0) endX = 0;
                 Bres_ThickLine(
-                    (int)bintang[i].x, (int)bintang[i].y,
-                    (int)(bintang[i].x + streak), (int)bintang[i].y,
+                    (int)cx, (int)cy,
+                    endX, (int)cy,
                     thick, (Color){200, 220, 255, 200}
                 );
             } else {
                 MidcircleFilled(
-                    (int)bintang[i].x, (int)bintang[i].y,
+                    (int)cx, (int)cy,
                     (int)bintang[i].size, (Color){200, 220, 255, 180}
                 );
             }

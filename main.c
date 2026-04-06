@@ -198,6 +198,18 @@ int main(void) {
             }
         }
 
+        // ── Kamera & Getaran ─────────────────────────────────────
+        float portalDistance   = fminf(fabsf(keretaX - portalX), fabsf(keretaX - leftPortalX));
+        float portalProximity  = clamp01(1.0f - portalDistance / 450.0f);
+        float shakeWeight      = warpFactor * (0.2f + 0.8f * portalProximity);
+        float shakeMagnitude   = 1.0f + shakeWeight * 14.0f;
+        if (shakeMagnitude < 0.0f) shakeMagnitude = 0.0f;
+        if (shakeMagnitude > 18.0f) shakeMagnitude = 18.0f;
+        Vector2 shakeOffset    = {
+            (GetRandomValue(-100, 100) / 100.0f) * shakeMagnitude,
+            (GetRandomValue(-100, 100) / 100.0f) * shakeMagnitude
+        };
+
         // ── Update Dunia ─────────────────────────────────────────
         updateBintang(warpFactor, dt);
         updatePlanets(warpFactor, dt);
@@ -207,9 +219,14 @@ int main(void) {
         ClearBackground((Color){3, 5, 18, 255});
 
         if (fase != MENU_MEKANISME) {
-            drawBintang(warpFactor);
+            drawBintang(warpFactor, shakeOffset);
             for (int i = 0; i < NUM_PLANETS; i++)
-                drawPlanet(planets[i].x, planets[i].y, planets[i].radius, planets[i].color);
+                drawPlanet(
+                    planets[i].x + shakeOffset.x,
+                    planets[i].y + shakeOffset.y,
+                    planets[i].radius,
+                    planets[i].color
+                );
         }
 
         if      (fase == MAIN_MENU)       drawMainMenu();
@@ -217,58 +234,58 @@ int main(void) {
         else if (fase == MENU_MEKANISME)  drawMekanisme(mekanismeTimer);
         else {
             // ── Portal Kanan ─────────────────────────────────────
-            drawPortal(portalX, portalY, 110.0f, portalRot, portalOpen);
+            drawPortal(portalX + shakeOffset.x, portalY + shakeOffset.y, 110.0f, portalRot, portalOpen);
 
             // ── Portal Kiri ──────────────────────────────────────
             if (leftPortalOpen > 0.0f)
-                drawPortal(leftPortalX, portalY, 110.0f, -portalRot, leftPortalOpen);
+                drawPortal(leftPortalX + shakeOffset.x, portalY + shakeOffset.y, 110.0f, -portalRot, leftPortalOpen);
 
             // ── Kereta (pass pertama dengan clipping) ────────────
             if (fase == IDLE || fase == CHARGE || fase == DONE) {
-                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
             } else if (fase == WARP) {
                 float kepalX = keretaX + 300.0f;
                 if (kepalX > portalX) {
                     BeginScissorMode(0, 0, (int)portalX, SH);
-                    drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                    drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
                     EndScissorMode();
                 } else {
-                    drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                    drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
                 }
             } else if (fase == WARP_LOOP) {
                 BeginScissorMode((int)leftPortalX, 0, (int)(portalX - leftPortalX), SH);
-                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
                 EndScissorMode();
             } else if (fase == ARRIVAL) {
                 BeginScissorMode((int)leftPortalX, 0, SW - (int)leftPortalX, SH);
-                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
                 EndScissorMode();
             }
 
             // ── Portal Kiri (overlay agar menutup ekor kereta) ───
             if (leftPortalOpen > 0.0f)
-                drawPortal(leftPortalX, portalY, 110.0f, -portalRot, leftPortalOpen);
+                drawPortal(leftPortalX + shakeOffset.x, portalY + shakeOffset.y, 110.0f, -portalRot, leftPortalOpen);
 
             // ── Kereta (pass kedua, identik, untuk render ulang
             //    di atas portal kiri yang baru digambar) ──────────
             if (fase == IDLE || fase == CHARGE || fase == DONE) {
-                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
             } else if (fase == WARP) {
                 float kepalX = keretaX + 300.0f;
                 if (kepalX > portalX) {
                     BeginScissorMode(0, 0, (int)portalX, SH);
-                    drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                    drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
                     EndScissorMode();
                 } else {
-                    drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                    drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
                 }
             } else if (fase == WARP_LOOP) {
                 BeginScissorMode((int)leftPortalX, 0, (int)(portalX - leftPortalX), SH);
-                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
                 EndScissorMode();
             } else if (fase == ARRIVAL) {
                 BeginScissorMode((int)leftPortalX, 0, SW - (int)leftPortalX, SH);
-                drawKereta(keretaX, keretaY, keretaAngle, warpFactor, rodaTheta);
+                drawKereta(keretaX + shakeOffset.x, keretaY + shakeOffset.y, keretaAngle, warpFactor, rodaTheta);
                 EndScissorMode();
             }
 
@@ -279,15 +296,20 @@ int main(void) {
                     "INPUT_WARP", "IDLE", "CHARGE", "WARP",
                     "WARP_LOOP", "ARRIVAL", "DONE"
                 };
-                DrawRectangle(10, 10, 310, 155, (Color){0, 0, 0, 140});
-                DrawRectangleLines(10, 10, 310, 155, (Color){0, 180, 255, 80});
+                DrawRectangle(10, 10, 310, 175, (Color){0, 0, 0, 140});
+                DrawRectangleLines(10, 10, 310, 175, (Color){0, 180, 255, 80});
                 DrawText("Astral Express - Warp Jump",                             20,  18, 16, (Color){0, 210, 255, 255});
                 DrawText(TextFormat("Fase       : %s",       namaFase[fase]),      20,  42, 13, WHITE);
                 DrawText(TextFormat("Warp Factor: %.2f",     warpFactor),          20,  60, 13, WHITE);
                 DrawText(TextFormat("Portal     : %.2f",     portalOpen),          20,  78, 13, WHITE);
                 DrawText(TextFormat("Roda theta : %.1f deg", rodaTheta*180/PI),    20,  96, 13, WHITE);
                 DrawText(TextFormat("Kereta XY  : (%.0f,%.0f)", keretaX, keretaY),20, 114, 13, WHITE);
-                DrawText(TextFormat("FPS        : %d", GetFPS()),                  20, 132, 13, GREEN);
+                DrawRectangle(20, 136, 260, 14, (Color){20, 40, 65, 220});
+                DrawRectangle(20, 136, (int)(clamp01(warpFactor) * 260.0f), 14, (Color){0, 180, 255, 220});
+                DrawRectangleLines(20, 136, 260, 14, (Color){0, 200, 255, 180});
+                DrawText("Warp Meter", 20, 118, 13, WHITE);
+                DrawText(TextFormat("%d%%", (int)(clamp01(warpFactor) * 100.0f)), 290, 136, 13, WHITE);
+                DrawText(TextFormat("FPS        : %d", GetFPS()),                  20, 154, 13, GREEN);
                 DrawText("[SPACE] Warp   [R] Reset   [H] HUD", 18, SH - 28, 13, (Color){160, 200, 255, 200});
             }
         }
